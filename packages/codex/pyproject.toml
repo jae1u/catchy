@@ -1,11 +1,13 @@
 [project]
-name = "catchy-core"
+name = "catchy-codex"
 version = "0.1.0"
 description = ""
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "pydantic>=2.13.4",
+    "catchy-core",
+    "openai-codex-app-server-sdk @ git+https://github.com/openai/codex.git@79ad209ce6cade1089cdbe4dbda8835731d5af15#subdirectory=sdk/python",
+    "docker>=7.1.0",
 ]
 
 [build-system]
@@ -16,7 +18,7 @@ build-backend = "setuptools.build_meta"
 "" = "."
 
 [tool.setuptools.packages.find]
-include = ["catchy.core*"]
+include = ["catchy.codex*"]
 namespaces = true
 
 [tool.setuptools.package-data]

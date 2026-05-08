@@ -7,16 +7,20 @@ requires-python = ">=3.14"
 dependencies = []
 
 [tool.uv.workspace]
-members = ["packages/core"]
+members = ["packages/core", "packages/codex"]
 
 [tool.uv.sources]
 catchy-core = { workspace = true }
+catchy-codex = { workspace = true }
 
 [tool.pyright]
-include = ["packages/core"]
-extraPaths = ["packages/core"]
+include = ["packages/core", "packages/codex"]
+extraPaths = ["packages/core", "packages/codex"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.14"
 useLibraryCodeForTypes = true
 typeCheckingMode = "strict"
+
+[dependency-groups]
+dev = ["catchy-codex", "catchy-core", "pyright>=1.1.409", "ruff>=0.15.12"]

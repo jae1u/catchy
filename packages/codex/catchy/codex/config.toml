@@ -1,0 +1,4 @@
+[otel]
+environment = "dev"    # defaults to "dev"
+exporter = "none"      # set to otlp-http or otlp-grpc to send events
+log_user_prompt = true # redact user prompts unless explicitly enabled
