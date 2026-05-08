@@ -116,6 +116,28 @@ class CodexAgent(Agent):
                 prompt = f"""You are the best at solving CTF challenges.
 Solve the challenge in /challenge and explain.
 
+Useful tools are already installed in this container:
+- Web challenges: use `curl`, `wget`, `nc`, `socat`, `nmap`, `jq`, Python
+  `requests`, `flask`, `PyJWT`, and Playwright. Use `chrome` for Playwright
+  Chromium, or `chrome-devtools` to start headless Chromium with the Chrome
+  DevTools Protocol on container port 9222.
+- Pwn / reversing: use `file`, `strings`, `xxd`, `objdump`, `readelf`,
+  `patchelf`, `gdb`, `gdbserver`, `ltrace`, `strace`, `r2`, `pwntools`,
+  `angr`, `capstone`, `unicorn`, and `ROPgadget`.
+- Crypto / math: use Python with `pycryptodome`, `sympy`, `gmpy2`, `z3`,
+  `fpylll`, `numpy`, `scipy`, plus `openssl`, `RsaCtfTool`, `flatter`,
+  `cado-nfs`, and `sage` if available.
+- Forensics / steg: use `binwalk`, `exiftool`, `steghide`, `stegseek`,
+  `zsteg`, `pngcheck`, `imagemagick`, `foremost`, `sleuthkit`, `testdisk`,
+  `dcfldd`, `volatility3`, `john`, and archive tools like `zip`, `unzip`,
+  `7z`, `xz`, and `zstd`.
+- Media / OCR: use `ffmpeg`, `sox`, `tesseract`, `pytesseract`, and `Pillow`.
+- Build / runtime helpers: use `gcc`, `g++`, `clang`, `make`, `cmake`,
+  `ninja`, `meson`, `node`, `npm`, `ruby`, `java`, `uv`, and Python 3.12 from
+  `/opt/ctf-venv`.
+- Challenge containers: use `podman` or `buildah` when a challenge provides a
+  Dockerfile or service image.
+
 <challenge-description>{challenge.description}</challenge-description>"""
 
                 if webhook is not None:
@@ -195,7 +217,9 @@ Solve the challenge in /challenge and explain.
             environment={
                 "HOME": "/workspace",
                 "CODEX_HOME": "/workspace/.codex",
+                "CHROME_REMOTE_DEBUGGING_PORT": "9222",
             },
+            ports={"9222/tcp": None},
             volumes={
                 str(challenge.directory): {"bind": "/challenge", "mode": "ro"},
                 str(workspace): {"bind": "/workspace", "mode": "rw"},
@@ -203,6 +227,19 @@ Solve the challenge in /challenge and explain.
         )
 
         _LOGGER.info(f"({self._id}) Started Docker container: {container.id}")
+        container.reload()
+        chrome_devtools_bindings = container.attrs["NetworkSettings"]["Ports"].get(
+            "9222/tcp"
+        )
+        if chrome_devtools_bindings:
+            chrome_devtools_url = (
+                f"http://{chrome_devtools_bindings[0]['HostIp']}:"
+                f"{chrome_devtools_bindings[0]['HostPort']}"
+            )
+            _LOGGER.info(
+                f"({self._id}) Chrome DevTools Protocol available after running "
+                f"`chrome-devtools`: {chrome_devtools_url}"
+            )
 
         result = container.exec_run(
             cmd=[
