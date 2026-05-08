@@ -23,4 +23,10 @@ useLibraryCodeForTypes = true
 typeCheckingMode = "strict"
 
 [dependency-groups]
-dev = ["catchy-codex", "catchy-core", "pyright>=1.1.409", "ruff>=0.15.12"]
+dev = [
+    "catchy-codex",
+    "catchy-core",
+    "pyright>=1.1.409",
+    "ruff>=0.15.12",
+    "textual>=6.5.0",
+]
