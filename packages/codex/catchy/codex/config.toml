@@ -1,3 +1,6 @@
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
+
 [otel]
 environment = "dev"    # defaults to "dev"
 exporter = "none"      # set to otlp-http or otlp-grpc to send events
