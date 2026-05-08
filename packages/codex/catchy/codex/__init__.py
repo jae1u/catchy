@@ -6,6 +6,7 @@ from typing import AsyncIterator
 
 from catchy.core.agents.protocols import Agent
 from catchy.core.challenge.models import Challenge
+from catchy.core.webhook.models import Webhook
 from codex_app_server import (
     AppServerConfig,
     AsyncCodex,
@@ -55,7 +56,9 @@ class CodexAgent(Agent):
         )
         _LOGGER.info(f"({self._id}) Docker image built: {self._docker_image.id}")
 
-    async def stream(self, challenge: Challenge, workspace: Path) -> AsyncIterator[str]:
+    async def stream(
+        self, challenge: Challenge, workspace: Path, webhook: Webhook | None = None
+    ) -> AsyncIterator[str]:
         if not workspace.exists():
             raise ValueError(f"workspace does not exist: {workspace}")
         if not workspace.is_dir():
@@ -98,14 +101,15 @@ class CodexAgent(Agent):
                             f"Expected at most one thread, but found {len(threads)}"
                         )
 
-                turn = await thread.turn(
-                    TextInput(
-                        f"""You are the best at solving CTF challenges.
+                prompt = f"""You are the best at solving CTF challenges.
 Solve the challenge in /challenge and explain.
 
 <challenge-description>{challenge.description}</challenge-description>"""
-                    )
-                )
+
+                if webhook is not None:
+                    prompt += f"""When you have any findings or trial and errors to share, send them to the webhook at {webhook.url}. Prefer to send messages in {webhook.preferred_language or "English"}."""
+
+                turn = await thread.turn(TextInput(prompt))
 
                 item_message = ""
 
