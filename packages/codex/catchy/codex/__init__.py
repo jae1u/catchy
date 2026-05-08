@@ -15,6 +15,7 @@ from codex_app_server import (
 from codex_app_server.generated.v2_all import (
     AgentMessageDeltaNotification,
     CommandExecutionOutputDeltaNotification,
+    ErrorNotification,
     FileChangeOutputDeltaNotification,
     ItemCompletedNotification,
     ItemStartedNotification,
@@ -23,6 +24,8 @@ from codex_app_server.generated.v2_all import (
     ReasoningSummaryPartAddedNotification,
     ReasoningSummaryTextDeltaNotification,
     TerminalInteractionNotification,
+    TurnCompletedNotification,
+    TurnStatus,
 )
 from codex_app_server.models import JsonObject
 from docker import DockerClient
@@ -121,29 +124,53 @@ Solve the challenge in /challenge and explain.
                             if item_message.strip():
                                 yield item_message
                             item_message = ""
+                        case ErrorNotification() as payload if (
+                            payload.turn_id == turn.id
+                        ):
+                            if payload.will_retry:
+                                _LOGGER.warning(
+                                    f"({self._id})({challenge.id}) Codex turn error; server will retry: {payload.error.message}"
+                                )
+                                continue
+                            raise RuntimeError(
+                                f"Codex reported a non-retryable turn error: {payload.error.message}"
+                            )
+                        case TurnCompletedNotification() as payload if (
+                            payload.turn.id == turn.id
+                        ):
+                            match payload.turn.status:
+                                case TurnStatus.completed:
+                                    pass
+                                case TurnStatus.failed:
+                                    raise RuntimeError(
+                                        f"Codex turn failed: {payload.turn.error.message if payload.turn.error else 'unknown error'}"
+                                    )
+                                case TurnStatus.interrupted:
+                                    raise RuntimeError(
+                                        f"Codex turn was interrupted: {payload.turn.error.message if payload.turn.error else 'unknown error'}"
+                                    )
+                                case TurnStatus.in_progress:
+                                    raise RuntimeError(
+                                        "Codex emitted turn/completed while the turn is still in progress"
+                                    )
                         case (
                             AgentMessageDeltaNotification()
                             | PlanDeltaNotification()
                             | ReasoningSummaryTextDeltaNotification()
                             | CommandExecutionOutputDeltaNotification()
                             | FileChangeOutputDeltaNotification()
-                        ):
-                            item_message += event.payload.delta
-                        case ReasoningSummaryPartAddedNotification():
-                            _LOGGER.info(
-                                f"({self._id})({challenge.id}) Reasoning summary part added: {event.payload}"
-                            )
-                        case TerminalInteractionNotification():
-                            _LOGGER.info(
-                                f"({self._id})({challenge.id}) Terminal interaction: {event.payload}"
-                            )
-                        case McpToolCallProgressNotification():
-                            _LOGGER.info(
-                                f"({self._id})({challenge.id}) MCP tool call progress: {event.payload}"
-                            )
+                        ) as payload:
+                            item_message += payload.delta
+                        case ReasoningSummaryPartAddedNotification() as payload:
+                            _LOGGER.info(f"({self._id})({challenge.id}) {payload}")
+                        case TerminalInteractionNotification() as payload:
+                            _LOGGER.info(f"({self._id})({challenge.id}) {payload}")
+                        case McpToolCallProgressNotification() as payload:
+                            _LOGGER.info(f"({self._id})({challenge.id}) {payload}")
                         case _:
-                            # TODO: raise an error
-                            ...
+                            _LOGGER.debug(
+                                f"({self._id})({challenge.id}) Ignoring Codex event: {event.method}"
+                            )
 
     @contextmanager
     def _docker_container(self, challenge: Challenge, workspace: Path):
