@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+import shlex
 from contextlib import contextmanager
 from pathlib import Path
 from typing import AsyncIterator
@@ -51,6 +53,7 @@ class CodexAgent(Agent):
         self._model = model
         self._config = config
         self._api_key = api_key
+        self._docker_user = f"{os.getuid()}:{os.getgid()}"
         self._id = f"agent-{self.key}-{model}-{hash(json.dumps(config, sort_keys=True)) % 10000:05d}"
 
         _LOGGER.info(f"({self._id}) Building Docker image from {self._dockerfile}...")
@@ -76,6 +79,12 @@ class CodexAgent(Agent):
                         "docker",
                         "exec",
                         "-i",
+                        "--user",
+                        self._docker_user,
+                        "--env",
+                        "HOME=/workspace",
+                        "--env",
+                        "CODEX_HOME=/workspace/.codex",
                         container.id,
                         "codex",
                         "app-server",
@@ -183,6 +192,10 @@ Solve the challenge in /challenge and explain.
             # Codex uses bubblewrap for its Linux sandbox; Docker's default confinement blocks the user/mount namespace setup bwrap needs.
             cap_add=["SYS_ADMIN"],
             security_opt=["seccomp=unconfined", "apparmor=unconfined"],
+            environment={
+                "HOME": "/workspace",
+                "CODEX_HOME": "/workspace/.codex",
+            },
             volumes={
                 str(challenge.directory): {"bind": "/challenge", "mode": "ro"},
                 str(workspace): {"bind": "/workspace", "mode": "rw"},
@@ -195,9 +208,13 @@ Solve the challenge in /challenge and explain.
             cmd=[
                 "sh",
                 "-c",
-                f"mkdir -p /workspace/.codex && echo '{
-                    json.dumps({'auth_mode': 'apikey', 'OPENAI_API_KEY': self._api_key})
-                }' > /workspace/.codex/auth.json",
+                " && ".join(
+                    [
+                        "mkdir -p /workspace/.codex",
+                        f"printf %s {shlex.quote(json.dumps({'auth_mode': 'apikey', 'OPENAI_API_KEY': self._api_key}))} > /workspace/.codex/auth.json",
+                        f"chown -R {self._docker_user} /workspace",
+                    ]
+                ),
             ]
         )
         if result.exit_code != 0:
