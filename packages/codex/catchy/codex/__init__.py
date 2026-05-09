@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
 import shlex
 from contextlib import contextmanager
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncIterator, Literal
 
 from catchy.core.agents.protocols import Agent
 from catchy.core.challenge.models import Challenge
@@ -29,38 +31,139 @@ from codex_app_server.generated.v2_all import (
     TurnCompletedNotification,
     TurnStatus,
 )
-from codex_app_server.models import JsonObject
 from docker import DockerClient
+from docker.errors import ContainerError, DockerException
+from docker.models.images import Image
+from jinja2 import Template
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationInfo,
+    field_serializer,
+    field_validator,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
+class _Model(BaseModel):
+    provider: Literal["openai"] = "openai"
+    name: str = "gpt-5.5"
+    api_key: str
+
+
+class _Directory(BaseModel):
+    challenge: str = "/challenge"
+    workspace: str = "/workspace"
+    persistent: str = "/persistent"
+
+
+class _Container(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    provider: Literal["docker"] = "docker"
+    socket: str = "/var/run/docker.sock"
+    image: Image
+
+    @field_validator("image", mode="before")
+    @classmethod
+    def _deserialize_image(cls, value: Image | str, info: ValidationInfo) -> Image:
+        if isinstance(value, Image):
+            return value
+
+        socket = info.data.get("socket", "/var/run/docker.sock")
+        client: DockerClient | None = None
+        try:
+            client = DockerClient(base_url=f"unix://{socket}")
+            try:
+                return client.images.get(value)
+            except DockerException:
+                _LOGGER.info("Pulling Docker image: %s", value)
+                return client.images.pull(value)
+        except DockerException as exc:
+            raise ValueError(
+                f"Failed to resolve Docker image {value!r}: {exc}"
+            ) from exc
+        finally:
+            if client is not None:
+                client.close()
+
+    @field_serializer("image")
+    def _serialize_image(self, value: Image) -> str:
+        return value.tags[0] if value.tags else value.id or value.short_id or ""
+
+
+class _PromptTemplate(BaseModel):
+    user: str
+
+
+class Configuration(BaseModel):
+    id: str
+    model: _Model
+    directory: _Directory
+    container: _Container
+    prompt: _PromptTemplate
+
+
 class CodexAgent(Agent):
     key: str = "codex"
-    _dockerfile = Path(__file__).parent / "Dockerfile"
+
+    @staticmethod
+    def from_configuration(configuration: Configuration) -> CodexAgent:
+        return CodexAgent(
+            id=configuration.id,
+            model_name=configuration.model.name,
+            model_api_key=configuration.model.api_key,
+            container_challenge_directory=configuration.directory.challenge,
+            container_workspace_directory=configuration.directory.workspace,
+            container_persistent_directory=configuration.directory.persistent,
+            docker_image=configuration.container.image,
+            docker_client=DockerClient(base_url=f"unix://{configuration.container.socket}"),
+            user_prompt_template=configuration.prompt.user,
+        )
 
     def __init__(
         self,
-        api_key: str,
-        docker_client: DockerClient | None = None,
-        model: str = "gpt-5.4",
-        config: JsonObject = {},
+        id: str,
+        model_name: str,
+        model_api_key: str,
+        container_challenge_directory: str,
+        container_workspace_directory: str,
+        container_persistent_directory: str,
+        docker_image: Image,
+        docker_client: DockerClient,
+        user_prompt_template: str,
+        # model_config: JsonObject = {},
     ):
-        if docker_client is None:
-            docker_client = DockerClient.from_env()
-
+        self._id = id
+        self._model_name = model_name
+        self._model_api_key = model_api_key
+        self._container_challenge_directory = container_challenge_directory
+        self._container_workspace_directory = container_workspace_directory
+        self._container_persistent_directory = container_persistent_directory
+        self._docker_image = docker_image
         self._docker_client = docker_client
-        self._model = model
-        self._config = config
-        self._api_key = api_key
-        self._docker_user = f"{os.getuid()}:{os.getgid()}"
-        self._id = f"agent-{self.key}-{model}-{hash(json.dumps(config, sort_keys=True)) % 10000:05d}"
+        self._user_prompt_template = user_prompt_template
 
-        _LOGGER.info(f"({self._id}) Building Docker image from {self._dockerfile}...")
-        self._docker_image, _ = self._docker_client.images.build(
-            path=str(self._dockerfile.parent), dockerfile=self._dockerfile.name
-        )
-        _LOGGER.info(f"({self._id}) Docker image built: {self._docker_image.id}")
+        image_name = docker_image.tags[0] if docker_image.tags else docker_image.id
+        try:
+            self._docker_client.containers.run(
+                self._docker_image,
+                command=["sh", "-c", "command -v codex >/dev/null 2>&1"],
+                remove=True,
+            )
+        except ContainerError as error:
+            raise RuntimeError(
+                f"Codex executable was not found in Docker image {image_name}"
+            ) from error
+        except DockerException as error:
+            raise RuntimeError(
+                f"Failed to check Codex executable in Docker image {image_name}: {error}"
+            ) from error
+
+    @property
+    def id(self) -> str:
+        return self._id
 
     async def stream(
         self, challenge: Challenge, workspace: Path, webhook: Webhook | None = None
@@ -79,8 +182,8 @@ class CodexAgent(Agent):
                         "docker",
                         "exec",
                         "-i",
-                        "--user",
-                        self._docker_user,
+                        # "--user",
+                        # f"{os.getuid()}:{os.getgid()}",
                         "--env",
                         "HOME=/workspace",
                         "--env",
@@ -98,50 +201,24 @@ class CodexAgent(Agent):
                 match threads:
                     case [thread]:
                         _LOGGER.info(
-                            f"({self._id})({challenge.id}) Resuming existing thread: {thread.id}"
+                            f"({self.id})({challenge.id}) Resuming existing thread: {thread.id}"
                         )
                         thread = await codex.thread_resume(thread.id)
                     case []:
-                        _LOGGER.info(
-                            f"({self._id})({challenge.id}) Starting new thread"
-                        )
+                        _LOGGER.info(f"({self.id})({challenge.id}) Starting new thread")
                         thread = await codex.thread_start(
-                            model=self._model, config=self._config
+                            model=self._model_name,
+                            config={},  # TODO: support custom model config
                         )
                     case _:
                         raise RuntimeError(
                             f"Expected at most one thread, but found {len(threads)}"
                         )
 
-                prompt = f"""You are the best at solving CTF challenges.
-Solve the challenge in /challenge and explain.
-
-Useful tools are already installed in this container:
-- Web challenges: use `curl`, `wget`, `nc`, `socat`, `nmap`, `jq`, Python
-  `requests`, `flask`, `PyJWT`, and Playwright. Use `chrome` for Playwright
-  Chromium, or `chrome-devtools` to start headless Chromium with the Chrome
-  DevTools Protocol on container port 9222.
-- Pwn / reversing: use `file`, `strings`, `xxd`, `objdump`, `readelf`,
-  `patchelf`, `gdb`, `gdbserver`, `ltrace`, `strace`, `r2`, `pwntools`,
-  `angr`, `capstone`, `unicorn`, and `ROPgadget`.
-- Crypto / math: use Python with `pycryptodome`, `sympy`, `gmpy2`, `z3`,
-  `fpylll`, `numpy`, `scipy`, plus `openssl`, `RsaCtfTool`, `flatter`,
-  `cado-nfs`, and `sage` if available.
-- Forensics / steg: use `binwalk`, `exiftool`, `steghide`, `stegseek`,
-  `zsteg`, `pngcheck`, `imagemagick`, `foremost`, `sleuthkit`, `testdisk`,
-  `dcfldd`, `volatility3`, `john`, and archive tools like `zip`, `unzip`,
-  `7z`, `xz`, and `zstd`.
-- Media / OCR: use `ffmpeg`, `sox`, `tesseract`, `pytesseract`, and `Pillow`.
-- Build / runtime helpers: use `gcc`, `g++`, `clang`, `make`, `cmake`,
-  `ninja`, `meson`, `node`, `npm`, `ruby`, `java`, `uv`, and Python 3.12 from
-  `/opt/ctf-venv`.
-- Challenge containers: use `podman` or `buildah` when a challenge provides a
-  Dockerfile or service image.
-
-<challenge-description>{challenge.description}</challenge-description>"""
-
-                if webhook is not None:
-                    prompt += f"""Frequently share any findings or trial and errors to the webhook at {webhook.url} in {webhook.preferred_language or "English"}."""
+                prompt = Template(self._user_prompt_template).render(
+                    challenge=challenge,
+                    webhook=webhook,
+                )
 
                 turn = await thread.turn(TextInput(prompt))
 
@@ -248,8 +325,8 @@ Useful tools are already installed in this container:
                 " && ".join(
                     [
                         "mkdir -p /workspace/.codex",
-                        f"printf %s {shlex.quote(json.dumps({'auth_mode': 'apikey', 'OPENAI_API_KEY': self._api_key}))} > /workspace/.codex/auth.json",
-                        f"chown -R {self._docker_user} /workspace",
+                        f"printf %s {shlex.quote(json.dumps({'auth_mode': 'apikey', 'OPENAI_API_KEY': self._model_api_key}))} > /workspace/.codex/auth.json",
+                        f"chown -R {os.getuid()}:{os.getgid()} /workspace",
                     ]
                 ),
             ]

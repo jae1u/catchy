@@ -2,18 +2,18 @@
 import argparse
 import asyncio
 import logging
-import os
 import shutil
 import sys
 import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from catchy.codex import CodexAgent
+from catchy.codex import CodexAgent, Configuration
 from catchy.core.challenge.models import Challenge
 from catchy.core.webhook.models import Webhook
+from omegaconf import DictConfig, OmegaConf
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
@@ -30,6 +30,7 @@ from textual.widgets import (
     ListItem,
     ListView,
     RichLog,
+    Select,
     Static,
 )
 
@@ -68,7 +69,16 @@ class StreamEvent:
     timestamp: datetime = field(default_factory=datetime.now)
 
 
-DEFAULT_MODEL = "gpt-5.4"
+def _new_events() -> list["StreamEvent"]:
+    return []
+
+
+@dataclass(frozen=True)
+class AgentDefinition:
+    id: str
+    path: Path
+    class_name: str
+    model_name: str
 
 
 @dataclass
@@ -78,10 +88,10 @@ class StreamState:
     webhook: Webhook | None
     workspace: Path
     status: str = "queued"
-    events: list[StreamEvent] = field(default_factory=list)
+    events: list[StreamEvent] = field(default_factory=_new_events)
     started: bool = False
     reset_workspace: bool = False
-    agent_model: str = DEFAULT_MODEL
+    agent_id: str = ""
     pause_gate: asyncio.Event = field(default_factory=asyncio.Event)
 
 
@@ -288,21 +298,37 @@ class CatchyApp(App[None]):
         padding: 0 0 1 0;
     }
 
-    #model-input {
+    #agent-select {
+        color: #ededed;
+        margin-bottom: 1;
+        height: auto;
+    }
+
+    #agent-select > SelectCurrent {
         background: #0a0a0a;
         color: #ededed;
         border: tall #262626;
-        margin-bottom: 1;
         height: 3;
+        padding: 0 1;
     }
 
-    #model-input:focus {
+    #agent-select > SelectCurrent Static#label {
+        color: #ededed;
+    }
+
+    #agent-select:focus > SelectCurrent {
         border: tall #ededed;
     }
 
-    #model-input:disabled {
+    #agent-select:disabled > SelectCurrent {
         color: #525252;
         border: tall #1a1a1a;
+    }
+
+    #agent-select > SelectOverlay {
+        background: #161616;
+        border: tall #3a3a3a;
+        max-height: 8;
     }
 
     /* ── Content ─────────────────────────────── */
@@ -359,9 +385,18 @@ class CatchyApp(App[None]):
         ("r", "refresh_active", "Refresh"),
     ]
 
-    def __init__(self, states: list[StreamState]) -> None:
+    def __init__(
+        self, states: list[StreamState], *, agent_definitions: list[AgentDefinition]
+    ) -> None:
         super().__init__()
         self._states = states
+        self._agent_definitions = {
+            definition.id: definition for definition in agent_definitions
+        }
+        self._default_agent_id = agent_definitions[0].id
+        self._pending_agent_id = self._default_agent_id
+        for state in self._states:
+            state.agent_id = state.agent_id or self._default_agent_id
         self._active_index = 0
         self._labels: list[Label] = []
         self._agents: dict[str, CodexAgent] = {}
@@ -378,6 +413,17 @@ class CatchyApp(App[None]):
                         id="challenge-input",
                     )
                     yield Button("Add challenge  →", id="add-challenge")
+                    with Vertical(id="settings-block"):
+                        yield Label("Agent", classes="settings-label")
+                        yield Select[str](
+                            self._agent_options(),
+                            value=self._default_agent_id,
+                            allow_blank=False,
+                            id="agent-select",
+                        )
+                        yield Checkbox(
+                            "Reset workspace on run", id="reset-selected"
+                        )
 
                 with Vertical(id="streams-section"):
                     yield Static("Streams", id="streams-header")
@@ -394,16 +440,6 @@ class CatchyApp(App[None]):
                     )
 
                 with Vertical(id="controls-section"):
-                    with Vertical(id="settings-block"):
-                        yield Label("Agent model", classes="settings-label")
-                        yield Input(
-                            value=DEFAULT_MODEL,
-                            placeholder=DEFAULT_MODEL,
-                            id="model-input",
-                        )
-                        yield Checkbox(
-                            "Reset workspace on run", id="reset-selected"
-                        )
                     with Horizontal(id="controls"):
                         yield Button("▶  Run", id="run-selected")
                         yield Button("⏸  Pause", id="pause-selected")
@@ -459,14 +495,19 @@ class CatchyApp(App[None]):
             return
         self._states[self._active_index].reset_workspace = event.value
 
-    @on(Input.Changed, "#model-input")
-    def on_model_changed(self, event: Input.Changed) -> None:
+    @on(Select.Changed, "#agent-select")
+    def on_agent_changed(self, event: Select.Changed) -> None:
+        if event.value == Select.NULL:
+            return
+
+        self._pending_agent_id = str(event.value)
         if not self._states:
             return
+
         state = self._states[self._active_index]
         if state.started:
             return
-        state.agent_model = event.value.strip() or DEFAULT_MODEL
+        state.agent_id = self._pending_agent_id
 
     def action_start_selected(self) -> None:
         if not self._states:
@@ -512,8 +553,10 @@ class CatchyApp(App[None]):
         state = self._states[index]
         try:
             self._set_status(index, "preparing")
-            agent = await self._get_agent(state.agent_model)
-            self._append_event(index, "status", f"agent: codex · {state.agent_model}")
+            agent = await self._get_agent(state.agent_id)
+            self._append_event(
+                index, "status", f"agent: {self._agent_label_by_id(state.agent_id)}"
+            )
             if state.reset_workspace:
                 _reset_workspace(state.workspace)
                 self._append_event(index, "status", "workspace reset")
@@ -540,19 +583,18 @@ class CatchyApp(App[None]):
             self._set_status(index, "failed")
             self._append_event(index, "error", str(error))
 
-    async def _get_agent(self, model: str) -> CodexAgent:
+    async def _get_agent(self, agent_id: str) -> CodexAgent:
         async with self._agent_lock:
-            agent = self._agents.get(model)
+            agent = self._agents.get(agent_id)
             if agent is None:
+                definition = self._agent_definitions[agent_id]
                 self._append_event(
-                    None, "status", f"building Codex image for {model}"
+                    None,
+                    "status",
+                    f"preparing {self._agent_label(definition)}",
                 )
-                agent = await asyncio.to_thread(
-                    CodexAgent,
-                    api_key=os.environ["OPENAI_API_KEY"],
-                    model=model,
-                )
-                self._agents[model] = agent
+                agent = await asyncio.to_thread(_load_agent, definition.path)
+                self._agents[agent_id] = agent
             return agent
 
     async def _add_challenge(self, raw_path: str) -> None:
@@ -567,6 +609,7 @@ class CatchyApp(App[None]):
             self._append_event(None, "error", str(error))
             return
 
+        state.agent_id = self._pending_agent_id
         index = len(self._states)
         self._states.append(state)
         label = Label(self._sidebar_text(state), id=f"stream-label-{index}")
@@ -602,7 +645,7 @@ class CatchyApp(App[None]):
         )
         self.query_one("#stream-path", Static).update(
             f"[{dim}]↳[/]  [{muted}]{state.root}[/]   "
-            f"[{dim}]·[/]  [{muted}]{state.agent_model}[/]"
+            f"[{dim}]·[/]  [{muted}]{self._agent_label_by_id(state.agent_id)}[/]"
         )
 
         log = self.query_one("#stream-log", RichLog)
@@ -702,7 +745,7 @@ class CatchyApp(App[None]):
                     f"[{dim}]1[/]   [{text}]Enter a challenge root[/]\n"
                     f"     [{muted}]e.g.[/] [{text}]challenges/lets-change[/]\n\n"
                     f"[{dim}]2[/]   [{text}]Press[/] [bold {text}]Enter[/] [{text}]or click[/] [bold {text}]Add challenge[/]\n\n"
-                    f"[{dim}]3[/]   [{text}]Configure the agent model, then hit[/] [bold {text}]Run[/]\n\n"
+                    f"[{dim}]3[/]   [{text}]Choose an agent, then hit[/] [bold {text}]Run[/]\n\n"
                     f"[{dim}]────────────────────────────────[/]\n\n"
                     f"[{muted}]Shortcuts[/]   "
                     f"[bold {text}]s[/] [{muted}]run[/]   "
@@ -722,31 +765,48 @@ class CatchyApp(App[None]):
         run_button = self.query_one("#run-selected", Button)
         pause_button = self.query_one("#pause-selected", Button)
         reset_checkbox = self.query_one("#reset-selected", Checkbox)
-        model_input = self.query_one("#model-input", Input)
+        agent_select = cast(Select[str], self.query_one("#agent-select", Select))
 
         if not self._states:
             run_button.disabled = True
             pause_button.disabled = True
             reset_checkbox.disabled = True
             reset_checkbox.value = False
-            model_input.disabled = True
-            model_input.value = DEFAULT_MODEL
+            agent_select.disabled = False
+            if agent_select.value != self._pending_agent_id:
+                agent_select.value = self._pending_agent_id
             pause_button.label = "⏸  Pause"
             return
 
         state = self._states[self._active_index]
+        state.agent_id = state.agent_id or self._pending_agent_id
         run_button.disabled = state.started
         reset_checkbox.disabled = state.started
         reset_checkbox.value = state.reset_workspace
-        model_input.disabled = state.started
-        if model_input.value != state.agent_model:
-            model_input.value = state.agent_model
+        agent_select.disabled = state.started
+        if agent_select.value != state.agent_id:
+            agent_select.value = state.agent_id
         pause_button.disabled = not state.started or state.status in {
             "queued",
             "completed",
             "failed",
         }
         pause_button.label = "▶  Resume" if state.status == "paused" else "⏸  Pause"
+
+    def _agent_label(self, definition: AgentDefinition) -> str:
+        return f"{definition.id} · {definition.model_name}"
+
+    def _agent_label_by_id(self, agent_id: str) -> str:
+        definition = self._agent_definitions.get(agent_id)
+        if definition is None:
+            return agent_id
+        return self._agent_label(definition)
+
+    def _agent_options(self) -> list[tuple[str, str]]:
+        return [
+            (self._agent_label(definition), definition.id)
+            for definition in self._agent_definitions.values()
+        ]
 
 
 def _load_challenge(input_directory: Path) -> tuple[Challenge, Webhook | None]:
@@ -774,6 +834,83 @@ def _reset_workspace(workspace: Path) -> None:
         shutil.rmtree(workspace)
 
 
+def _normalized_agent_data(config: DictConfig, *, resolve: bool) -> dict[str, Any]:
+    raw_data: Any = OmegaConf.to_container(config, resolve=resolve)
+    if not isinstance(raw_data, dict):
+        raise TypeError("agent configuration must be a mapping")
+
+    raw_mapping = cast(dict[Any, Any], raw_data)
+    return {str(key): value for key, value in raw_mapping.items()}
+
+
+def _load_agent_definition(config_path: Path) -> AgentDefinition:
+    config = OmegaConf.load(config_path)
+    if not isinstance(config, DictConfig):
+        raise TypeError(f"agent configuration must be a mapping: {config_path}")
+
+    data = _normalized_agent_data(config, resolve=False)
+    agent_id = data.get("id")
+    if not isinstance(agent_id, str) or not agent_id:
+        raise ValueError(f"agent configuration is missing an id: {config_path}")
+
+    class_name = data.get("class", "CodexAgent")
+    if not isinstance(class_name, str) or not class_name:
+        raise ValueError(f"agent configuration has an invalid class: {config_path}")
+
+    model = data.get("model")
+    model_name = ""
+    if isinstance(model, dict):
+        model = cast(dict[str, Any], model)
+        raw_model_name = model.get("name")
+        if isinstance(raw_model_name, str):
+            model_name = raw_model_name
+
+    return AgentDefinition(
+        id=agent_id,
+        path=config_path,
+        class_name=class_name,
+        model_name=model_name or "unknown model",
+    )
+
+
+def _load_agent_definitions(configurations_dir: Path) -> list[AgentDefinition]:
+    root = configurations_dir.expanduser().resolve()
+    if not root.exists():
+        raise FileNotFoundError(f"configurations directory not found: {root}")
+    if not root.is_dir():
+        raise NotADirectoryError(f"configurations path is not a directory: {root}")
+
+    config_paths = sorted([*root.glob("*.yaml"), *root.glob("*.yml")])
+    definitions = [_load_agent_definition(path) for path in config_paths]
+    if not definitions:
+        raise RuntimeError(f"no agent configuration files found in {root}")
+
+    seen: set[str] = set()
+    for definition in definitions:
+        if definition.id in seen:
+            raise RuntimeError(f"duplicate agent id in configurations: {definition.id}")
+        seen.add(definition.id)
+        if definition.class_name != "CodexAgent":
+            raise ValueError(
+                f"unsupported agent class {definition.class_name!r} in {definition.path}"
+            )
+    return definitions
+
+
+def _load_agent(config_path: Path) -> CodexAgent:
+    config = OmegaConf.load(config_path)
+    if not isinstance(config, DictConfig):
+        raise TypeError(f"agent configuration must be a mapping: {config_path}")
+
+    data = _normalized_agent_data(config, resolve=True)
+    class_name = data.get("class", "CodexAgent")
+    if class_name != "CodexAgent":
+        raise ValueError(f"unsupported agent class {class_name!r} in {config_path}")
+
+    configuration = Configuration.model_validate(data)
+    return CodexAgent.from_configuration(configuration)
+
+
 def _load_state(input_directory: Path) -> StreamState:
     root = input_directory.expanduser().resolve()
     challenge, webhook = _load_challenge(root)
@@ -797,13 +934,20 @@ def main() -> int:
         type=Path,
         help="Optional initial challenge roots containing challenge.toml and source/",
     )
+    parser.add_argument(
+        "--configurations-dir",
+        default=Path("configurations"),
+        type=Path,
+        help="Directory containing agent YAML configurations",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
 
     try:
+        agent_definitions = _load_agent_definitions(args.configurations_dir)
         states = _load_states(args.input_directories)
-        CatchyApp(states).run()
+        CatchyApp(states, agent_definitions=agent_definitions).run()
     except Exception as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

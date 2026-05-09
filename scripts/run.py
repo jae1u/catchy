@@ -2,16 +2,16 @@
 import argparse
 import asyncio
 import logging
-import os
 import shutil
 import sys
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from catchy.codex import CodexAgent
+from catchy.codex import CodexAgent, Configuration
 from catchy.core.challenge.models import Challenge
 from catchy.core.webhook.models import Webhook
+from omegaconf import DictConfig, OmegaConf
 
 
 def _load_challenge(input_directory: Path) -> tuple[Challenge, Webhook | None]:
@@ -45,7 +45,33 @@ def _reset_workspace(workspace: Path) -> None:
     shutil.rmtree(workspace)
 
 
-async def _run(input_directory: Path, *, reset_workspace: bool) -> None:
+def _normalized_agent_data(config: DictConfig, *, resolve: bool) -> dict[str, Any]:
+    raw_data: Any = OmegaConf.to_container(config, resolve=resolve)
+    if not isinstance(raw_data, dict):
+        raise TypeError("agent configuration must be a mapping")
+
+    raw_mapping = cast(dict[Any, Any], raw_data)
+    return {str(key): value for key, value in raw_mapping.items()}
+
+
+def _load_agent(config_path: Path) -> CodexAgent:
+    config_path = config_path.expanduser().resolve()
+    config = OmegaConf.load(config_path)
+    if not isinstance(config, DictConfig):
+        raise TypeError(f"agent configuration must be a mapping: {config_path}")
+
+    data = _normalized_agent_data(config, resolve=True)
+    class_name = data.get("class", "CodexAgent")
+    if class_name != "CodexAgent":
+        raise ValueError(f"unsupported agent class {class_name!r} in {config_path}")
+
+    configuration = Configuration.model_validate(data)
+    return CodexAgent.from_configuration(configuration)
+
+
+async def _run(
+    input_directory: Path, *, reset_workspace: bool, agent_configuration: Path
+) -> None:
     logging.basicConfig(level=logging.INFO)
 
     input_directory = input_directory.resolve()
@@ -55,7 +81,7 @@ async def _run(input_directory: Path, *, reset_workspace: bool) -> None:
         _reset_workspace(workspace)
     workspace.mkdir(exist_ok=True, parents=True)
 
-    agent = CodexAgent(api_key=os.environ["OPENAI_API_KEY"])
+    agent = _load_agent(agent_configuration)
 
     async for delta in agent.stream(
         challenge=challenge,
@@ -78,10 +104,23 @@ def main() -> int:
         action="store_true",
         help="Delete workspace if previous trial exists before running",
     )
+    parser.add_argument(
+        "--agent-configuration",
+        "-a",
+        default=Path("configurations/codex.yaml"),
+        type=Path,
+        help="Path to an agent YAML configuration",
+    )
     args = parser.parse_args()
 
     try:
-        asyncio.run(_run(args.input_directory, reset_workspace=args.reset_workspace))
+        asyncio.run(
+            _run(
+                args.input_directory,
+                reset_workspace=args.reset_workspace,
+                agent_configuration=args.agent_configuration,
+            )
+        )
     except KeyError as error:
         print(
             f"missing required configuration or environment key: {error}",
