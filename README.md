@@ -6,7 +6,7 @@
 
 Autonomous AI agent that plays capture-the-flag challenges.
 
-<sub>[TUI App](./scripts/app.py) &nbsp;·&nbsp; [CLI Runner](./scripts/run.py)</sub>
+<sub>[Web](https://catchy.bxta.kr) &nbsp;·&nbsp; [TUI App](./scripts/app.py) &nbsp;·&nbsp; [CLI Runner](./scripts/run.py)</sub>
 
 <br/>
 <br/>
