@@ -385,12 +385,16 @@ def thread_stream(request: HttpRequest, pk: int) -> HttpResponse:
         if not request.user.is_authenticated:
             return redirect_to_login(request.get_full_path())
         raise PermissionDenied
-    last_sequence = _nonnegative_int(request.GET.get("after"))
+    last_sequence = max(
+        _nonnegative_int(request.GET.get("after")),
+        _nonnegative_int(request.headers.get("Last-Event-ID")),
+    )
     response = StreamingHttpResponse(
         _event_stream(thread.pk, last_sequence),
         content_type="text/event-stream",
     )
     response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
     return response
 
 
@@ -399,6 +403,7 @@ def _event_stream(thread_id: int, last_sequence: int = 0) -> Iterator[str]:
         thread = Thread.objects.get(pk=thread_id)
         for event in _events_after(thread_id, last_sequence):
             last_sequence = event.sequence
+            yield f"id: {event.sequence}\n"
             yield "event: stream\n"
             yield f"data: {json.dumps(_event_payload(event, cost_model=_thread_cost_model(thread)), ensure_ascii=False)}\n\n"
 

@@ -302,7 +302,33 @@ class PublicThreadAccessTests(TestCase):
         body = b"".join(response.streaming_content).decode()
 
         self.assertNotIn('"sequence": 1', body)
+        self.assertIn("id: 2", body)
         self.assertIn('"sequence": 2', body)
+        self.assertEqual(response.headers["X-Accel-Buffering"], "no")
+
+    def test_thread_stream_resumes_after_last_event_id(self) -> None:
+        thread = self._create_thread("stream-last-event-id", is_public=True)
+        for sequence in range(1, 4):
+            StreamEvent.objects.create(
+                thread=thread,
+                sequence=sequence,
+                dedupe_key=str(sequence),
+                source="system",
+                kind="thread.event",
+                text=str(sequence),
+            )
+
+        response = self.client.get(
+            reverse("ctf:thread_stream", kwargs={"pk": thread.pk}),
+            {"after": "1"},
+            headers={"Last-Event-ID": "2"},
+        )
+        body = b"".join(response.streaming_content).decode()
+
+        self.assertNotIn('"sequence": 1', body)
+        self.assertNotIn('"sequence": 2', body)
+        self.assertIn("id: 3", body)
+        self.assertIn('"sequence": 3', body)
 
     def _create_thread(
         self,

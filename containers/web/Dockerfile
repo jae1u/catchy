@@ -52,4 +52,4 @@ VOLUME ["/data", "/var/lib/docker"]
 EXPOSE 8000
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/catchy-web-entrypoint"]
-CMD ["gunicorn", "catchy.web.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--access-logfile", "-", "--error-logfile", "-", "--capture-output", "--log-level", "info"]
+CMD ["gunicorn", "catchy.web.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--worker-class", "gthread", "--threads", "8", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "--capture-output", "--log-level", "info"]
