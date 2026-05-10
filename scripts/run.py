@@ -3,8 +3,8 @@ import argparse
 import asyncio
 import importlib
 import logging
-import shutil
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -12,6 +12,11 @@ from catchy.core.agents.protocols import Agent
 from catchy.core.challenge.models import Challenge
 from catchy.core.webhook.models import Webhook
 from omegaconf import DictConfig, OmegaConf
+
+
+def _new_thread_root(challenge_root: Path) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    return challenge_root / f"thread-{timestamp}"
 
 
 def _load_yaml_mapping(config_path: Path) -> dict[str, Any]:
@@ -43,17 +48,6 @@ def _load_challenge(input_directory: Path) -> tuple[Challenge, Webhook | None]:
     webhook = Webhook(**webhook_data) if webhook_data is not None else None
 
     return challenge, webhook
-
-
-def _reset_workspace(workspace: Path) -> None:
-    if not workspace.exists():
-        return
-
-    answer = input(f"Delete existing workspace at {workspace}? [y/N] ").strip().lower()
-    if answer not in {"y", "yes"}:
-        raise RuntimeError("workspace reset cancelled")
-
-    shutil.rmtree(workspace)
 
 
 def _normalized_agent_data(config: DictConfig, *, resolve: bool) -> dict[str, Any]:
@@ -124,19 +118,19 @@ def _load_agent(config_path: Path) -> Agent:
     return agent
 
 
-async def _run(
-    input_directory: Path, *, reset_workspace: bool, agent_configuration: Path
-) -> None:
+async def _run(input_directory: Path, *, agent_configuration: Path) -> None:
     logging.basicConfig(level=logging.INFO)
 
     input_directory = input_directory.resolve()
     challenge, webhook = _load_challenge(input_directory)
-    workspace = input_directory / "workspace"
-    if reset_workspace:
-        _reset_workspace(workspace)
+    thread_root = _new_thread_root(input_directory)
+    workspace = thread_root / "workspace"
     workspace.mkdir(exist_ok=True, parents=True)
 
     agent = _load_agent(agent_configuration)
+    print(f"thread: {thread_root}")
+    print(f"workspace: {workspace}")
+    print("=" * 80)
 
     async for delta in agent.stream(
         challenge=challenge,
@@ -155,11 +149,6 @@ def main() -> int:
         help="Path to a challenge root containing challenge.yaml and source/",
     )
     parser.add_argument(
-        "--reset-workspace",
-        action="store_true",
-        help="Delete workspace if previous trial exists before running",
-    )
-    parser.add_argument(
         "--agent-configuration",
         "-a",
         default=Path("configurations/codex.yaml"),
@@ -172,7 +161,6 @@ def main() -> int:
         asyncio.run(
             _run(
                 args.input_directory,
-                reset_workspace=args.reset_workspace,
                 agent_configuration=args.agent_configuration,
             )
         )

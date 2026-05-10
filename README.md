@@ -17,7 +17,7 @@ Autonomous AI agent that plays capture-the-flag challenges.
 
 ## What is this
 
-Catchy plugs an agent into a CTF challenge, runs it inside a sandboxed workspace, and streams every reasoning step, command, and file change to your terminal. Multiple challenges can run side-by-side in the TUI, and each stream gets its own workspace, agent model, and event log.
+Catchy plugs an agent into a CTF challenge, runs it inside a sandboxed workspace, and streams every reasoning step, command, and file change to your terminal. Multiple challenge threads can run side-by-side in the TUI, and each thread gets its own workspace, agent model, and event log.
 
 ## Quick start
 
@@ -61,7 +61,8 @@ Challenges are directories with a `challenge.yaml` file and a `source/` folder. 
 challenges/lets-change/
 ├── challenge.yaml      # id, description, optional webhook
 ├── source/             # files mounted into the agent's container
-└── workspace/          # writable scratchpad, created on first run
+└── thread-.../         # one directory per run
+    └── workspace/      # writable scratchpad mounted into the agent container
 ```
 
 ```yaml
@@ -73,6 +74,14 @@ webhook: # optional
   url: "https://discord.com/api/webhooks/..."
   preferred_language: English
 ```
+
+Every run starts a new thread directory:
+
+```text
+challenges/lets-change/thread-20260510-041230-123456/workspace/
+```
+
+The CLI prints the generated thread and workspace paths before streaming output. In the TUI, add a challenge root, choose an agent, then select **Start thread**.
 
 ## Agent Configuration
 
@@ -94,11 +103,11 @@ The old shorthand `class: CodexAgent` still resolves to `catchy.codex.CodexAgent
 
 | Key                       | Action                 |
 | ------------------------- | ---------------------- |
-| <kbd>s</kbd>              | Run selected stream    |
+| <kbd>s</kbd>              | Start selected thread  |
 | <kbd>space</kbd>          | Pause / resume         |
 | <kbd>r</kbd>              | Refresh the active log |
 | <kbd>q</kbd>              | Quit                   |
-| <kbd>↑</kbd> <kbd>↓</kbd> | Move between streams   |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Move between threads   |
 
 ## Project layout
 

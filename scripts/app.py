@@ -3,7 +3,6 @@ import argparse
 import asyncio
 import importlib
 import logging
-import shutil
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -22,7 +21,6 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
     Button,
-    Checkbox,
     Footer,
     Header,
     Input,
@@ -62,6 +60,11 @@ STATUS_STYLES: dict[str, tuple[str, str]] = {
 }
 
 
+def _new_thread_root(challenge_root: Path) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    return challenge_root / f"thread-{timestamp}"
+
+
 @dataclass
 class StreamEvent:
     kind: str
@@ -86,11 +89,11 @@ class StreamState:
     root: Path
     challenge: Challenge
     webhook: Webhook | None
-    workspace: Path
+    thread_root: Path | None = None
+    workspace: Path | None = None
     status: str = "queued"
     events: list[StreamEvent] = field(default_factory=_new_events)
     started: bool = False
-    reset_workspace: bool = False
     agent_id: str = ""
     pause_gate: asyncio.Event = field(default_factory=asyncio.Event)
 
@@ -278,16 +281,6 @@ class CatchyApp(App[None]):
         border: tall #f0883e;
     }
 
-    #reset-selected {
-        background: #0a0a0a;
-        color: #8b8b8b;
-        padding: 0;
-    }
-
-    #reset-selected:focus > .toggle--label {
-        text-style: none;
-    }
-
     #settings-block {
         height: auto;
         margin-bottom: 1;
@@ -380,7 +373,7 @@ class CatchyApp(App[None]):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("ctrl+c", "quit", "Quit"),
-        ("s", "start_selected", "Run"),
+        ("s", "start_selected", "Start thread"),
         ("space", "toggle_pause", "Pause"),
         ("r", "refresh_active", "Refresh"),
     ]
@@ -421,12 +414,9 @@ class CatchyApp(App[None]):
                             allow_blank=False,
                             id="agent-select",
                         )
-                        yield Checkbox(
-                            "Reset workspace on run", id="reset-selected"
-                        )
 
                 with Vertical(id="streams-section"):
-                    yield Static("Streams", id="streams-header")
+                    yield Static("Threads", id="streams-header")
                     self._labels = [
                         Label(self._sidebar_text(state), id=f"stream-label-{index}")
                         for index, state in enumerate(self._states)
@@ -441,7 +431,7 @@ class CatchyApp(App[None]):
 
                 with Vertical(id="controls-section"):
                     with Horizontal(id="controls"):
-                        yield Button("▶  Run", id="run-selected")
+                        yield Button("▶  Start thread", id="run-selected")
                         yield Button("⏸  Pause", id="pause-selected")
 
             with Vertical(id="content"):
@@ -489,12 +479,6 @@ class CatchyApp(App[None]):
     def on_pause_selected_pressed(self) -> None:
         self.action_toggle_pause()
 
-    @on(Checkbox.Changed, "#reset-selected")
-    def on_reset_changed(self, event: Checkbox.Changed) -> None:
-        if not self._states:
-            return
-        self._states[self._active_index].reset_workspace = event.value
-
     @on(Select.Changed, "#agent-select")
     def on_agent_changed(self, event: Select.Changed) -> None:
         if event.value == Select.NULL:
@@ -516,15 +500,19 @@ class CatchyApp(App[None]):
 
         state = self._states[self._active_index]
         if state.started:
-            self._append_event(self._active_index, "status", "stream already started")
+            self._append_event(self._active_index, "status", "thread already started")
             return
 
+        state.thread_root = _new_thread_root(state.root)
+        state.workspace = state.thread_root / "workspace"
         state.started = True
         state.pause_gate.set()
+        self._render_active_stream()
+        self._sync_controls()
         self.run_worker(
             self._run_stream(index=self._active_index),
-            name=f"catchy-stream-{self._active_index}",
-            group="catchy-streams",
+            name=f"catchy-thread-{self._active_index}",
+            group="catchy-threads",
         )
 
     def action_toggle_pause(self) -> None:
@@ -534,7 +522,7 @@ class CatchyApp(App[None]):
 
         state = self._states[self._active_index]
         if not state.started or state.status in {"queued", "completed", "failed"}:
-            self._append_event(self._active_index, "status", "stream is not running")
+            self._append_event(self._active_index, "status", "thread is not running")
             return
 
         if state.pause_gate.is_set():
@@ -557,16 +545,19 @@ class CatchyApp(App[None]):
             self._append_event(
                 index, "status", f"agent: {self._agent_label_by_id(state.agent_id)}"
             )
-            if state.reset_workspace:
-                _reset_workspace(state.workspace)
-                self._append_event(index, "status", "workspace reset")
-            state.workspace.mkdir(exist_ok=True, parents=True)
+            if state.thread_root is None or state.workspace is None:
+                state.thread_root = _new_thread_root(state.root)
+                state.workspace = state.thread_root / "workspace"
+            thread_root = state.thread_root
+            workspace = state.workspace
+            workspace.mkdir(exist_ok=True, parents=True)
 
             self._set_status(index, "running")
-            self._append_event(index, "status", f"workspace: {state.workspace}")
+            self._append_event(index, "status", f"thread: {thread_root}")
+            self._append_event(index, "status", f"workspace: {workspace}")
             stream = agent.stream(
                 challenge=state.challenge,
-                workspace=state.workspace,
+                workspace=workspace,
                 webhook=state.webhook,
             ).__aiter__()
             while True:
@@ -639,12 +630,18 @@ class CatchyApp(App[None]):
 
         muted = PALETTE["text_muted"]
         dim = PALETTE["text_dim"]
-        self.query_one("#stream-id", Static).update(state.challenge.id)
+        thread_name = (
+            state.thread_root.name if state.thread_root is not None else "new thread"
+        )
+        self.query_one("#stream-id", Static).update(
+            f"{state.challenge.id} / {thread_name}"
+        )
         self.query_one("#stream-status-pill", Static).update(
             self._status_pill(state.status)
         )
         self.query_one("#stream-path", Static).update(
             f"[{dim}]↳[/]  [{muted}]{state.root}[/]   "
+            f"[{dim}]·[/]  [{muted}]{thread_name}[/]   "
             f"[{dim}]·[/]  [{muted}]{self._agent_label_by_id(state.agent_id)}[/]"
         )
 
@@ -731,7 +728,7 @@ class CatchyApp(App[None]):
         dim = PALETTE["text_dim"]
         border = PALETTE["border"]
 
-        self.query_one("#stream-id", Static).update(f"[{muted}]No stream selected[/]")
+        self.query_one("#stream-id", Static).update(f"[{muted}]No thread selected[/]")
         self.query_one("#stream-status-pill", Static).update(f"[{dim}]○  EMPTY[/]")
         self.query_one("#stream-path", Static).update("")
 
@@ -741,14 +738,14 @@ class CatchyApp(App[None]):
             Panel(
                 Text.from_markup(
                     f"[bold {text}]Get started[/]\n"
-                    f"[{muted}]Run autonomous CTF streams with Catchy.[/]\n\n"
+                    f"[{muted}]Start autonomous CTF threads with Catchy.[/]\n\n"
                     f"[{dim}]1[/]   [{text}]Enter a challenge root[/]\n"
                     f"     [{muted}]e.g.[/] [{text}]challenges/lets-change[/]\n\n"
                     f"[{dim}]2[/]   [{text}]Press[/] [bold {text}]Enter[/] [{text}]or click[/] [bold {text}]Add challenge[/]\n\n"
-                    f"[{dim}]3[/]   [{text}]Choose an agent, then hit[/] [bold {text}]Run[/]\n\n"
+                    f"[{dim}]3[/]   [{text}]Choose an agent, then hit[/] [bold {text}]Start thread[/]\n\n"
                     f"[{dim}]────────────────────────────────[/]\n\n"
                     f"[{muted}]Shortcuts[/]   "
-                    f"[bold {text}]s[/] [{muted}]run[/]   "
+                    f"[bold {text}]s[/] [{muted}]start thread[/]   "
                     f"[bold {text}]space[/] [{muted}]pause[/]   "
                     f"[bold {text}]r[/] [{muted}]refresh[/]   "
                     f"[bold {text}]q[/] [{muted}]quit[/]"
@@ -764,14 +761,11 @@ class CatchyApp(App[None]):
     def _sync_controls(self) -> None:
         run_button = self.query_one("#run-selected", Button)
         pause_button = self.query_one("#pause-selected", Button)
-        reset_checkbox = self.query_one("#reset-selected", Checkbox)
         agent_select = cast(Select[str], self.query_one("#agent-select", Select))
 
         if not self._states:
             run_button.disabled = True
             pause_button.disabled = True
-            reset_checkbox.disabled = True
-            reset_checkbox.value = False
             agent_select.disabled = False
             if agent_select.value != self._pending_agent_id:
                 agent_select.value = self._pending_agent_id
@@ -781,8 +775,6 @@ class CatchyApp(App[None]):
         state = self._states[self._active_index]
         state.agent_id = state.agent_id or self._pending_agent_id
         run_button.disabled = state.started
-        reset_checkbox.disabled = state.started
-        reset_checkbox.value = state.reset_workspace
         agent_select.disabled = state.started
         if agent_select.value != state.agent_id:
             agent_select.value = state.agent_id
@@ -838,11 +830,6 @@ def _load_challenge(input_directory: Path) -> tuple[Challenge, Webhook | None]:
     webhook = Webhook(**webhook_data) if webhook_data is not None else None
 
     return challenge, webhook
-
-
-def _reset_workspace(workspace: Path) -> None:
-    if workspace.exists():
-        shutil.rmtree(workspace)
 
 
 def _normalized_agent_data(config: DictConfig, *, resolve: bool) -> dict[str, Any]:
@@ -967,7 +954,6 @@ def _load_state(input_directory: Path) -> StreamState:
         root=root,
         challenge=challenge,
         webhook=webhook,
-        workspace=root / "workspace",
     )
 
 
@@ -976,7 +962,7 @@ def _load_states(input_directories: list[Path]) -> list[StreamState]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Catchy CTF streams in a TUI.")
+    parser = argparse.ArgumentParser(description="Run Catchy CTF threads in a TUI.")
     parser.add_argument(
         "input_directories",
         nargs="*",
