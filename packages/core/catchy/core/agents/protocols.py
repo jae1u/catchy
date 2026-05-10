@@ -10,5 +10,9 @@ class Agent(ABC):
     key: str
 
     def stream(
-        self, challenge: Challenge, workspace: Path, webhook: Webhook | None = None
+        self,
+        challenge: Challenge,
+        workspace: Path,
+        metadata_directory: Path,
+        webhook: Webhook | None = None,
     ) -> AsyncIterator[str]: ...

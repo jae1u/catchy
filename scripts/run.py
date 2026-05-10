@@ -125,16 +125,20 @@ async def _run(input_directory: Path, *, agent_configuration: Path) -> None:
     challenge, webhook = _load_challenge(input_directory)
     thread_root = _new_thread_root(input_directory)
     workspace = thread_root / "workspace"
+    metadata = thread_root / "metadata"
     workspace.mkdir(exist_ok=True, parents=True)
+    metadata.mkdir(exist_ok=True, parents=True)
 
     agent = _load_agent(agent_configuration)
     print(f"thread: {thread_root}")
     print(f"workspace: {workspace}")
+    print(f"metadata: {metadata}")
     print("=" * 80)
 
     async for delta in agent.stream(
         challenge=challenge,
         workspace=workspace,
+        metadata=metadata,
         webhook=webhook,
     ):
         print(delta)

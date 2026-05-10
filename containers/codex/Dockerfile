@@ -5,57 +5,57 @@ ENV DEBIAN_FRONTEND=noninteractive
 # System packages
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        # Codex runtime
-        bubblewrap nodejs npm \
-        # Shell / everyday utilities
-        bash-completion ca-certificates curl wget git jq less vim nano tmux \
-        file xxd bsdextrautils zip unzip p7zip-full xz-utils zstd \
-        procps psmisc htop \
-        # Networking
-        netcat-openbsd socat nmap dnsutils iproute2 iputils-ping \
-        openssh-client tcpdump whois \
-        # Binary analysis / reversing
-        binutils elfutils patchelf gdb gdbserver ltrace strace \
-        # Build tools
-        build-essential clang make cmake ninja-build meson pkg-config \
-        autoconf automake libtool \
-        # Python base
-        python3 python3-pip python3-dev python3-venv pipx \
-        # Ruby / Java
-        ruby ruby-dev default-jre-headless \
-        # Forensics / steg / image analysis
-        binwalk libimage-exiftool-perl steghide pngcheck imagemagick \
-        # Filesystem forensics
-        xfsprogs sleuthkit foremost dcfldd testdisk \
-        # Audio / media / OCR
-        ffmpeg sox tesseract-ocr tesseract-ocr-eng \
-        # Crypto / cracking helpers
-        openssl libssl-dev john \
-        # Math libs required by flatter, cado-nfs, fpylll, gmpy2
-        libgmp-dev libmpfr-dev libmpc-dev libfplll-dev libeigen3-dev \
-        libopenblas-dev liblapack-dev \
-        # z3 solver system lib
-        libz3-dev \
-        # CADO-NFS build deps
-        libhwloc-dev libbz2-dev \
-        # Source-build deps for stegseek
-        libmhash-dev libmcrypt-dev libjpeg-dev zlib1g-dev \
-        # Nested containers for challenge images
-        podman buildah fuse-overlayfs slirp4netns uidmap \
-        # Chromium runtime deps for Playwright / Chrome DevTools Protocol
-        libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
-        libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
-        libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
-        libatspi2.0-0 fonts-liberation libxshmfence1 \
+    # Codex runtime
+    bubblewrap nodejs npm \
+    # Shell / everyday utilities
+    bash-completion ca-certificates curl wget git jq less vim nano tmux \
+    file xxd bsdextrautils zip unzip p7zip-full xz-utils zstd \
+    procps psmisc htop \
+    # Networking
+    netcat-openbsd socat nmap dnsutils iproute2 iputils-ping \
+    openssh-client tcpdump whois \
+    # Binary analysis / reversing
+    binutils elfutils patchelf gdb gdbserver ltrace strace \
+    # Build tools
+    build-essential clang make cmake ninja-build meson pkg-config \
+    autoconf automake libtool \
+    # Python base
+    python3 python3-pip python3-dev python3-venv pipx \
+    # Ruby / Java
+    ruby ruby-dev default-jre-headless \
+    # Forensics / steg / image analysis
+    binwalk libimage-exiftool-perl steghide pngcheck imagemagick \
+    # Filesystem forensics
+    xfsprogs sleuthkit foremost dcfldd testdisk \
+    # Audio / media / OCR
+    ffmpeg sox tesseract-ocr tesseract-ocr-eng \
+    # Crypto / cracking helpers
+    openssl libssl-dev john \
+    # Math libs required by flatter, cado-nfs, fpylll, gmpy2
+    libgmp-dev libmpfr-dev libmpc-dev libfplll-dev libeigen3-dev \
+    libopenblas-dev liblapack-dev \
+    # z3 solver system lib
+    libz3-dev \
+    # CADO-NFS build deps
+    libhwloc-dev libbz2-dev \
+    # Source-build deps for stegseek
+    libmhash-dev libmcrypt-dev libjpeg-dev zlib1g-dev \
+    # Nested containers for challenge images
+    podman buildah fuse-overlayfs slirp4netns uidmap \
+    # Chromium runtime deps for Playwright / Chrome DevTools Protocol
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+    libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
+    libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
+    libatspi2.0-0 fonts-liberation libxshmfence1 \
     && rm -rf /var/lib/apt/lists/*
 
 # SageMath is useful for crypto / algebra challenges, but it is not always
 # published for every Ubuntu release in the base image series.
 RUN apt-get update \
     && if apt-cache policy sagemath | awk '/Candidate:/ { exit ($2 == "(none)") }'; then \
-        apt-get install -y --no-install-recommends sagemath; \
+    apt-get install -y --no-install-recommends sagemath; \
     else \
-        echo "sagemath is not available for this Ubuntu release; skipping"; \
+    echo "sagemath is not available for this Ubuntu release; skipping"; \
     fi \
     && rm -rf /var/lib/apt/lists/*
 
@@ -99,32 +99,32 @@ ENV PATH="/opt/ctf-venv/bin:/usr/local/bin:$PATH"
 
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     && python -m pip install --no-cache-dir \
-        pwntools \
-        pycryptodome \
-        sympy \
-        gmpy2 \
-        requests \
-        Pillow \
-        z3-solver \
-        pytesseract \
-        scipy \
-        numpy \
-        angr \
-        capstone \
-        unicorn \
-        ropgadget \
-        tqdm \
-        fpylll \
-        flask \
-        volatility3 \
-        PyJWT \
-        pyghidra \
-        playwright \
-        ipython
+    pwntools \
+    pycryptodome \
+    sympy \
+    gmpy2 \
+    requests \
+    Pillow \
+    z3-solver \
+    pytesseract \
+    scipy \
+    numpy \
+    angr \
+    capstone \
+    unicorn \
+    ropgadget \
+    tqdm \
+    fpylll \
+    flask \
+    volatility3 \
+    PyJWT \
+    pyghidra \
+    playwright \
+    ipython
 
 # Browser automation / Chrome DevTools Protocol
 RUN chrome_url="$(curl -fsSL https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json \
-        | jq -r '.channels.Stable.downloads.chrome[] | select(.platform == "linux64") | .url')" \
+    | jq -r '.channels.Stable.downloads.chrome[] | select(.platform == "linux64") | .url')" \
     && mkdir -p /opt/chrome-for-testing \
     && curl -fsSL "$chrome_url" -o /tmp/chrome-linux64.zip \
     && unzip -q /tmp/chrome-linux64.zip -d /opt/chrome-for-testing \
@@ -132,32 +132,32 @@ RUN chrome_url="$(curl -fsSL https://googlechromelabs.github.io/chrome-for-testi
     && chmod -R a+rX /opt/chrome-for-testing
 
 RUN printf '%s\n' \
-        '#!/bin/sh' \
-        'set -eu' \
-        'exec /opt/chrome-for-testing/chrome-linux64/chrome --no-sandbox --disable-dev-shm-usage "$@"' \
-        > /usr/local/bin/chrome \
+    '#!/bin/sh' \
+    'set -eu' \
+    'exec /opt/chrome-for-testing/chrome-linux64/chrome --no-sandbox --disable-dev-shm-usage "$@"' \
+    > /usr/local/bin/chrome \
     && chmod +x /usr/local/bin/chrome \
     && printf '%s\n' \
-        '#!/bin/sh' \
-        'set -eu' \
-        ': "${CHROME_REMOTE_DEBUGGING_PORT:=9222}"' \
-        ': "${CHROME_USER_DATA_DIR:=/tmp/chrome-devtools-profile}"' \
-        'exec chrome \' \
-        '  --headless=new \' \
-        '  --remote-debugging-address=0.0.0.0 \' \
-        '  --remote-debugging-port="$CHROME_REMOTE_DEBUGGING_PORT" \' \
-        '  --user-data-dir="$CHROME_USER_DATA_DIR" \' \
-        '  --no-first-run \' \
-        '  --no-default-browser-check \' \
-        '  "$@"' \
-        > /usr/local/bin/chrome-devtools \
+    '#!/bin/sh' \
+    'set -eu' \
+    ': "${CHROME_REMOTE_DEBUGGING_PORT:=9222}"' \
+    ': "${CHROME_USER_DATA_DIR:=/tmp/chrome-devtools-profile}"' \
+    'exec chrome \' \
+    '  --headless=new \' \
+    '  --remote-debugging-address=0.0.0.0 \' \
+    '  --remote-debugging-port="$CHROME_REMOTE_DEBUGGING_PORT" \' \
+    '  --user-data-dir="$CHROME_USER_DATA_DIR" \' \
+    '  --no-first-run \' \
+    '  --no-default-browser-check \' \
+    '  "$@"' \
+    > /usr/local/bin/chrome-devtools \
     && chmod +x /usr/local/bin/chrome-devtools
 
 # PyTorch (CPU-only) + Keras
 RUN python -m pip install --no-cache-dir \
-        torch \
-        --index-url https://download.pytorch.org/whl/cpu \
-        --extra-index-url https://pypi.org/simple \
+    torch \
+    --index-url https://download.pytorch.org/whl/cpu \
+    --extra-index-url https://pypi.org/simple \
     && python -m pip install --no-cache-dir keras
 
 # RsaCtfTool (catch-all automated RSA/factoring attacks)
@@ -170,17 +170,17 @@ RUN git clone --depth=1 https://gitlab.inria.fr/cado-nfs/cado-nfs.git /opt/cado-
     && make -j"$(nproc)"
 
 RUN printf '%s\n' \
-        '#!/bin/bash' \
-        'BUILD_PARENT=/opt/cado-nfs/build' \
-        'H=$(hostname)' \
-        'if [ ! -d "$BUILD_PARENT/$H" ]; then' \
-        '  src=$(ls -d "$BUILD_PARENT"/* 2>/dev/null | head -1)' \
-        '  [ -n "$src" ] && ln -sf "$src" "$BUILD_PARENT/$H"' \
-        'fi' \
-        'exec python3 /opt/cado-nfs/cado-nfs.py "$@"' \
-        > /usr/local/bin/cado-nfs \
+    '#!/bin/bash' \
+    'BUILD_PARENT=/opt/cado-nfs/build' \
+    'H=$(hostname)' \
+    'if [ ! -d "$BUILD_PARENT/$H" ]; then' \
+    '  src=$(ls -d "$BUILD_PARENT"/* 2>/dev/null | head -1)' \
+    '  [ -n "$src" ] && ln -sf "$src" "$BUILD_PARENT/$H"' \
+    'fi' \
+    'exec python3 /opt/cado-nfs/cado-nfs.py "$@"' \
+    > /usr/local/bin/cado-nfs \
     && chmod +x /usr/local/bin/cado-nfs
 
-ENV CODEX_HOME=/workspace/.codex
-COPY config.toml /workspace/.codex/config.toml
+ENV CODEX_HOME=/metadata/.codex
+COPY config.toml /metadata/.codex/config.toml
 WORKDIR /workspace

@@ -91,6 +91,7 @@ class StreamState:
     webhook: Webhook | None
     thread_root: Path | None = None
     workspace: Path | None = None
+    metadata: Path | None = None
     status: str = "queued"
     events: list[StreamEvent] = field(default_factory=_new_events)
     started: bool = False
@@ -505,6 +506,7 @@ class CatchyApp(App[None]):
 
         state.thread_root = _new_thread_root(state.root)
         state.workspace = state.thread_root / "workspace"
+        state.metadata = state.thread_root / "metadata"
         state.started = True
         state.pause_gate.set()
         self._render_active_stream()
@@ -545,19 +547,28 @@ class CatchyApp(App[None]):
             self._append_event(
                 index, "status", f"agent: {self._agent_label_by_id(state.agent_id)}"
             )
-            if state.thread_root is None or state.workspace is None:
+            if (
+                state.thread_root is None
+                or state.workspace is None
+                or state.metadata is None
+            ):
                 state.thread_root = _new_thread_root(state.root)
                 state.workspace = state.thread_root / "workspace"
+                state.metadata = state.thread_root / "metadata"
             thread_root = state.thread_root
             workspace = state.workspace
+            metadata = state.metadata
             workspace.mkdir(exist_ok=True, parents=True)
+            metadata.mkdir(exist_ok=True, parents=True)
 
             self._set_status(index, "running")
             self._append_event(index, "status", f"thread: {thread_root}")
             self._append_event(index, "status", f"workspace: {workspace}")
+            self._append_event(index, "status", f"metadata: {metadata}")
             stream = agent.stream(
                 challenge=state.challenge,
                 workspace=workspace,
+                metadata=metadata,
                 webhook=state.webhook,
             ).__aiter__()
             while True:

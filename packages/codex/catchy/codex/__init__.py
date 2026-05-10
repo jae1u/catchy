@@ -55,7 +55,7 @@ class _Model(BaseModel):
 class _Directory(BaseModel):
     challenge: str = "/challenge"
     workspace: str = "/workspace"
-    persistent: str = "/persistent"
+    metadata: str = "/metadata"
 
 
 class _Container(BaseModel):
@@ -116,9 +116,11 @@ class CodexAgent(Agent):
             model_api_key=configuration.model.api_key,
             container_challenge_directory=configuration.directory.challenge,
             container_workspace_directory=configuration.directory.workspace,
-            container_persistent_directory=configuration.directory.persistent,
+            container_metadata_directory=configuration.directory.metadata,
             docker_image=configuration.container.image,
-            docker_client=DockerClient(base_url=f"unix://{configuration.container.socket}"),
+            docker_client=DockerClient(
+                base_url=f"unix://{configuration.container.socket}"
+            ),
             user_prompt_template=configuration.prompt.user,
         )
 
@@ -129,7 +131,7 @@ class CodexAgent(Agent):
         model_api_key: str,
         container_challenge_directory: str,
         container_workspace_directory: str,
-        container_persistent_directory: str,
+        container_metadata_directory: str,
         docker_image: Image,
         docker_client: DockerClient,
         user_prompt_template: str,
@@ -140,7 +142,7 @@ class CodexAgent(Agent):
         self._model_api_key = model_api_key
         self._container_challenge_directory = container_challenge_directory
         self._container_workspace_directory = container_workspace_directory
-        self._container_persistent_directory = container_persistent_directory
+        self._container_metadata_directory = container_metadata_directory
         self._docker_image = docker_image
         self._docker_client = docker_client
         self._user_prompt_template = user_prompt_template
@@ -166,15 +168,27 @@ class CodexAgent(Agent):
         return self._id
 
     async def stream(
-        self, challenge: Challenge, workspace: Path, webhook: Webhook | None = None
+        self,
+        challenge: Challenge,
+        workspace: Path,
+        metadata_directory: Path,
+        webhook: Webhook | None = None,
     ) -> AsyncIterator[str]:
         if not workspace.exists():
             raise ValueError(f"workspace does not exist: {workspace}")
         if not workspace.is_dir():
             raise ValueError(f"workspace is not a directory: {workspace}")
+        if not metadata_directory.exists():
+            raise ValueError(f"metadata directory does not exist: {metadata_directory}")
+        if not metadata_directory.is_dir():
+            raise ValueError(
+                f"metadata directory is not a directory: {metadata_directory}"
+            )
 
         with self._docker_container(
-            challenge=challenge, workspace=workspace
+            challenge=challenge,
+            workspace=workspace,
+            metadata_directory=metadata_directory,
         ) as container:
             async with AsyncCodex(
                 config=AppServerConfig(
@@ -182,12 +196,10 @@ class CodexAgent(Agent):
                         "docker",
                         "exec",
                         "-i",
-                        # "--user",
-                        # f"{os.getuid()}:{os.getgid()}",
                         "--env",
-                        "HOME=/workspace",
+                        f"HOME={self._container_workspace_directory}",
                         "--env",
-                        "CODEX_HOME=/workspace/.codex",
+                        f"CODEX_HOME={self._container_metadata_directory}/.codex",
                         container.id,
                         "codex",
                         "app-server",
@@ -281,8 +293,13 @@ class CodexAgent(Agent):
                             )
 
     @contextmanager
-    def _docker_container(self, challenge: Challenge, workspace: Path):
+    def _docker_container(
+        self, challenge: Challenge, workspace: Path, metadata_directory: Path
+    ):
         assert workspace.is_dir()
+        assert metadata_directory.is_dir()
+
+        codex_home = f"{self._container_metadata_directory}/.codex"
 
         container = self._docker_client.containers.run(
             self._docker_image,
@@ -292,14 +309,24 @@ class CodexAgent(Agent):
             cap_add=["SYS_ADMIN"],
             security_opt=["seccomp=unconfined", "apparmor=unconfined"],
             environment={
-                "HOME": "/workspace",
-                "CODEX_HOME": "/workspace/.codex",
+                "HOME": self._container_workspace_directory,
+                "CODEX_HOME": codex_home,
                 "CHROME_REMOTE_DEBUGGING_PORT": "9222",
             },
             ports={"9222/tcp": None},
             volumes={
-                str(challenge.directory): {"bind": "/challenge", "mode": "ro"},
-                str(workspace): {"bind": "/workspace", "mode": "rw"},
+                str(challenge.directory): {
+                    "bind": self._container_challenge_directory,
+                    "mode": "ro",
+                },
+                str(workspace): {
+                    "bind": self._container_workspace_directory,
+                    "mode": "rw",
+                },
+                str(metadata_directory): {
+                    "bind": self._container_metadata_directory,
+                    "mode": "rw",
+                },
             },
         )
 
@@ -324,9 +351,9 @@ class CodexAgent(Agent):
                 "-c",
                 " && ".join(
                     [
-                        "mkdir -p /workspace/.codex",
-                        f"printf %s {shlex.quote(json.dumps({'auth_mode': 'apikey', 'OPENAI_API_KEY': self._model_api_key}))} > /workspace/.codex/auth.json",
-                        f"chown -R {os.getuid()}:{os.getgid()} /workspace",
+                        f"mkdir -p {shlex.quote(codex_home)}",
+                        f"printf %s {shlex.quote(json.dumps({'auth_mode': 'apikey', 'OPENAI_API_KEY': self._model_api_key}))} > {shlex.quote(f'{codex_home}/auth.json')}",
+                        f"chown -R {os.getuid()}:{os.getgid()} {shlex.quote(self._container_workspace_directory)} {shlex.quote(self._container_metadata_directory)}",
                     ]
                 ),
             ]

@@ -62,7 +62,8 @@ challenges/lets-change/
 ├── challenge.yaml      # id, description, optional webhook
 ├── source/             # files mounted into the agent's container
 └── thread-.../         # one directory per run
-    └── workspace/      # writable scratchpad mounted into the agent container
+    ├── workspace/      # writable scratchpad mounted into the agent container
+    └── metadata/       # run metadata and artifacts kept separate from workspace
 ```
 
 ```yaml
@@ -79,9 +80,10 @@ Every run starts a new thread directory:
 
 ```text
 challenges/lets-change/thread-20260510-041230-123456/workspace/
+challenges/lets-change/thread-20260510-041230-123456/metadata/
 ```
 
-The CLI prints the generated thread and workspace paths before streaming output. In the TUI, add a challenge root, choose an agent, then select **Start thread**.
+The CLI prints the generated thread, workspace, and metadata paths before streaming output. In the TUI, add a challenge root, choose an agent, then select **Start thread**.
 
 ## Agent Configuration
 
@@ -155,6 +157,7 @@ class MyAgent(Agent):
         self,
         challenge: Challenge,
         workspace: Path,
+        metadata: Path,
         webhook: Webhook | None = None,
     ) -> AsyncIterator[str]:
         yield "thinking..."
