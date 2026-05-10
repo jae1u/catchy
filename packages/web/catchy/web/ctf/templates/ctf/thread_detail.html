@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+
+{% block title %}Thread #{{ thread.pk }} — Catchy{% endblock %}
+
+{% block content %}
+  <div class="crumbs reveal">
+    <a href="{% url 'ctf:index' %}">Index</a>
+    <span class="sep">/</span>
+    {% if can_manage_thread %}
+      <a href="{{ thread.ctf.get_absolute_url }}">{{ thread.ctf.title }}</a>
+    {% else %}
+      <span>{{ thread.ctf.title }}</span>
+    {% endif %}
+    <span class="sep">/</span>
+    {% if can_manage_thread %}
+      <a href="{{ thread.challenge.get_absolute_url }}">{{ thread.challenge.challenge_id }}</a>
+    {% else %}
+      <span>{{ thread.challenge.challenge_id }}</span>
+    {% endif %}
+    <span class="sep">/</span>
+    <span class="now">#{{ thread.pk }}</span>
+  </div>
+
+  <div class="page-head">
+    <div class="title">
+      <div class="muted" style="font-size: 13px; margin-bottom: 12px;">
+        Thread · <span class="mono">#{{ thread.pk }}</span>
+      </div>
+      <h1 class="display reveal" style="margin: 0;">{{ thread }}</h1>
+      <div class="row" style="margin-top: 18px;">
+        <span class="status status-{{ thread.status }}" id="status-label">
+          <span id="status">{{ thread.status }}</span>
+        </span>
+        {% if thread.is_public %}
+          <span class="status status-public">public</span>
+        {% endif %}
+        {% if thread.agent %}
+          <span class="muted" style="font-size: 13px;">agent · {{ thread.agent.name }}</span>
+        {% endif %}
+        <span class="muted" style="font-size: 13px;">cost · $<span id="cost" class="num">{{ thread.latest_cost_usd }}</span></span>
+      </div>
+    </div>
+    <div class="actions">
+      {% if can_manage_thread %}
+        <form action="{% url 'ctf:thread_publish' thread.pk %}" method="post" style="margin: 0;">
+          {% csrf_token %}
+          {% if thread.is_public %}
+            <input type="hidden" name="is_public" value="0">
+            <button type="submit" class="btn">Unpublish</button>
+          {% else %}
+            <input type="hidden" name="is_public" value="1">
+            <button type="submit" class="btn btn-primary">Publish</button>
+          {% endif %}
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if thread.error %}
+    <div class="panel reveal" style="border-color: var(--err); margin-bottom: 32px;">
+      <div class="panel-head" style="background: var(--err); color: #fff; border-color: var(--err);">
+        <span style="color: #fff; font-weight: 500;">Error</span>
+        <span style="color: rgba(255,255,255,0.8); font-size: 13px;">stream halted</span>
+      </div>
+      <pre>{{ thread.error }}</pre>
+    </div>
+  {% endif %}
+
+  {% if can_manage_thread %}
+    {% if thread.status == "queued" or thread.status == "running" %}
+      <form class="steer-floating" id="steer-form" action="{% url 'ctf:thread_steer' thread.pk %}" method="post">
+        {% csrf_token %}
+        <textarea name="text" rows="1" required placeholder="steer the agent…" id="steer-text"></textarea>
+        <button type="submit" class="steer-send" aria-label="Send" title="Send">↑</button>
+      </form>
+      <script>
+        (function () {
+          document.body.classList.add("has-steer");
+          const ta = document.getElementById("steer-text");
+          const form = document.getElementById("steer-form");
+          function autoGrow() {
+            ta.style.height = "auto";
+            ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+          }
+          ta.addEventListener("input", autoGrow);
+          ta.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              if (ta.value.trim()) form.submit();
+            }
+          });
+          autoGrow();
+        })();
+      </script>
+    {% endif %}
+  {% endif %}
+
+  <section class="reveal">
+    <div class="section-head" style="margin-bottom: 20px;">
+      <h2>Timeline</h2>
+      <span class="meta"><span id="event-count">0</span> event{{ thread.events.count|pluralize }}</span>
+    </div>
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  {{ events_json|json_script:"events-data" }}
+
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
+  <script>
+    (function () {
+      const timeline = document.getElementById("timeline");
+      const eventCount = document.getElementById("event-count");
+      const statusNode = document.getElementById("status");
+      const statusLabel = document.getElementById("status-label");
+      const costNode = document.getElementById("cost");
+
+      let countSeen = 0;
+      let runningCostUsd = 0;
+      let prevRowCostUsd = 0;
+      let lastSequenceSeen = 0;
+      let lastEventTime = null;
+      let currentAssistantBubble = null;
+      let currentAssistantText = "";
+      let currentAssistantMeta = null;
+      let currentAssistantStartTs = null;
+      let currentAssistantEndTs = null;
+      let currentAssistantBaseCostUsd = 0;
+      let currentRail = null;
+
+      marked.setOptions({ breaks: true, gfm: true });
+      const renderMarkdown = (text) =>
+        DOMPurify.sanitize(marked.parse(text || ""));
+
+      function fmtTime(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        const ss = String(d.getSeconds()).padStart(2, "0");
+        return `${hh}:${mm}:${ss}`;
+      }
+
+      function fmtDelta(prevIso, nextIso) {
+        if (!prevIso || !nextIso) return "";
+        const ms = new Date(nextIso) - new Date(prevIso);
+        if (isNaN(ms) || ms < 0) return "";
+        if (ms < 1000) return `+${ms}ms`;
+        if (ms < 60000) return `+${(ms / 1000).toFixed(1)}s`;
+        const m = Math.floor(ms / 60000);
+        const s = Math.floor((ms % 60000) / 1000);
+        return `+${m}m${s}s`;
+      }
+
+      function classifyKind(source, kind) {
+        if (source === "system") {
+          if (kind === "thread.failed") return "danger";
+          if (kind === "thread.completed") return "success";
+          return "info";
+        }
+        if (source === "codex_jsonl") {
+          if (kind === "function_call") return "tool";
+          if (kind === "function_call_output") return "tool-out";
+          if (kind === "token_count") return "metric";
+          if (kind === "message") return "success";
+          return "info";
+        }
+        return "";
+      }
+
+      function safeStringify(value) {
+        try { return JSON.stringify(value, null, 2); }
+        catch (e) { return String(value); }
+      }
+
+      function parseUsd(value) {
+        if (typeof value === "number" && Number.isFinite(value)) return value;
+        if (typeof value === "string" && value.trim()) {
+          const parsed = parseFloat(value);
+          if (!Number.isNaN(parsed)) return parsed;
+        }
+        return null;
+      }
+
+      function formatDeltaUsd(delta) {
+        const sign = delta >= 0 ? "+" : "−";
+        return `${sign}$${Math.abs(delta).toFixed(4)}`;
+      }
+
+      function summarize(ev) {
+        const text = (ev.text || "").trim();
+        if (!text) return "";
+        const oneLine = text.replace(/\s+/g, " ");
+        return oneLine.length > 200 ? oneLine.slice(0, 200) + "…" : oneLine;
+      }
+
+      function tokenStats(ev) {
+        const raw = ev.raw;
+        if (!raw || typeof raw !== "object") return { stats: null, costUsd: null };
+        const payload = raw.payload || raw;
+        const info = (payload && (payload.info || payload.usage)) || null;
+        if (!info || typeof info !== "object") return { stats: null, costUsd: null };
+        const usage = info.total_token_usage || info.last_token_usage || info;
+        if (!usage || typeof usage !== "object") return { stats: null, costUsd: null };
+        const stats = [];
+        const keys = [
+          ["input_tokens", "input"],
+          ["output_tokens", "output"],
+          ["cached_input_tokens", "cached"],
+          ["cached_tokens", "cached"],
+          ["total_tokens", "total"],
+        ];
+        const seenLabels = new Set();
+        for (const [key, label] of keys) {
+          if (typeof usage[key] === "number" && !seenLabels.has(label)) {
+            stats.push({ label, value: usage[key].toLocaleString() });
+            seenLabels.add(label);
+          }
+        }
+        let costUsd = parseUsd(ev.cost_usd);
+        if (costUsd == null) costUsd = parseUsd(info.usd);
+        if (costUsd == null) costUsd = parseUsd(info.cost);
+        if (costUsd != null) stats.push({ label: "$", value: costUsd.toFixed(4) });
+        return { stats: stats.length ? stats : null, costUsd };
+      }
+
+      function ensureRail() {
+        if (currentRail) return currentRail;
+        const rail = document.createElement("div");
+        rail.className = "trace-rail";
+        timeline.appendChild(rail);
+        currentRail = rail;
+        return rail;
+      }
+
+      function flushAssistantBubble() {
+        if (currentAssistantBubble) {
+          prevRowCostUsd = runningCostUsd;
+        }
+        currentAssistantBubble = null;
+        currentAssistantText = "";
+        currentAssistantMeta = null;
+        currentAssistantStartTs = null;
+        currentAssistantEndTs = null;
+        currentAssistantBaseCostUsd = runningCostUsd;
+      }
+
+      function flushRail() {
+        currentRail = null;
+      }
+
+      function updateAssistantMeta() {
+        if (!currentAssistantMeta) return;
+        const rowDelta = runningCostUsd - currentAssistantBaseCostUsd;
+        const deltaPart = ` · Δ${formatDeltaUsd(rowDelta)}`;
+        const sumPart = runningCostUsd ? ` · Σ$${runningCostUsd.toFixed(4)}` : "";
+        currentAssistantMeta.textContent =
+          `agent · ${fmtTime(currentAssistantStartTs)} → ${fmtTime(currentAssistantEndTs)}${deltaPart}${sumPart}`;
+      }
+
+      function appendAssistantDelta(ev) {
+        const text = ev.text || "";
+        if (!text) return;
+        flushRail();
+        if (!currentAssistantBubble) {
+          const row = document.createElement("div");
+          row.className = "bubble-row assistant";
+          const bubble = document.createElement("div");
+          bubble.className = "bubble assistant";
+          const meta = document.createElement("div");
+          meta.className = "bubble-meta";
+          row.appendChild(bubble);
+          row.appendChild(meta);
+          timeline.appendChild(row);
+          currentAssistantBubble = bubble;
+          currentAssistantMeta = meta;
+          currentAssistantStartTs = ev.created_at;
+          currentAssistantText = "";
+          currentAssistantBaseCostUsd = prevRowCostUsd;
+        }
+        currentAssistantEndTs = ev.created_at;
+        currentAssistantText += text;
+        currentAssistantBubble.innerHTML = renderMarkdown(currentAssistantText);
+        updateAssistantMeta();
+      }
+
+      function appendUserBubble(ev) {
+        flushAssistantBubble();
+        flushRail();
+        const row = document.createElement("div");
+        row.className = "bubble-row user";
+        const bubble = document.createElement("div");
+        bubble.className = "bubble user";
+        bubble.innerHTML = renderMarkdown(ev.text || "");
+        const meta = document.createElement("div");
+        meta.className = "bubble-meta";
+        const rowDelta = runningCostUsd - prevRowCostUsd;
+        prevRowCostUsd = runningCostUsd;
+        const deltaPart = ` · Δ${formatDeltaUsd(rowDelta)}`;
+        const sumPart = runningCostUsd ? ` · Σ$${runningCostUsd.toFixed(4)}` : "";
+        meta.textContent = `you · ${fmtTime(ev.created_at)}${deltaPart}${sumPart}`;
+        row.appendChild(bubble);
+        row.appendChild(meta);
+        timeline.appendChild(row);
+      }
+
+      function appendTrace(ev) {
+        flushAssistantBubble();
+        const rail = ensureRail();
+
+        const trace = document.createElement("div");
+        const kindClass = classifyKind(ev.source, ev.kind);
+        trace.className = "trace" + (kindClass ? " kind-" + kindClass : "");
+
+        const header = document.createElement("div");
+        header.className = "trace-header";
+
+        const chevron = document.createElement("span");
+        chevron.className = "trace-chevron";
+        chevron.textContent = "▶";
+
+        const time = document.createElement("span");
+        time.className = "trace-time";
+        time.textContent = fmtTime(ev.created_at);
+
+        const kindBadge = document.createElement("span");
+        kindBadge.className = "trace-kind" + (kindClass ? " " + kindClass : "");
+        kindBadge.textContent = ev.kind || ev.source || "event";
+
+        const sourceLabel = document.createElement("span");
+        sourceLabel.className = "trace-source";
+        sourceLabel.textContent = ev.source;
+
+        const summary = document.createElement("span");
+        summary.className = "trace-summary";
+        summary.textContent = summarize(ev);
+
+        header.appendChild(chevron);
+        header.appendChild(time);
+        header.appendChild(kindBadge);
+        header.appendChild(sourceLabel);
+        header.appendChild(summary);
+
+        const stats = tokenStats(ev);
+        if (stats.costUsd != null) runningCostUsd = stats.costUsd;
+        const rowDelta = runningCostUsd - prevRowCostUsd;
+        prevRowCostUsd = runningCostUsd;
+
+        const statsToShow = stats.stats ? [...stats.stats] : [];
+        const dt = fmtDelta(lastEventTime, ev.created_at);
+        if (dt) {
+          const dur = document.createElement("span");
+          dur.className = "trace-duration";
+          dur.textContent = dt;
+          header.appendChild(dur);
+        }
+        statsToShow.push({
+          label: "Δ$",
+          value: formatDeltaUsd(rowDelta).replace("$", ""),
+        });
+        if (runningCostUsd) {
+          statsToShow.push({ label: "Σ$", value: runningCostUsd.toFixed(4) });
+        }
+        if (statsToShow.length) {
+          const wrap = document.createElement("span");
+          wrap.className = "trace-stats";
+          for (const s of statsToShow) {
+            const tag = document.createElement("span");
+            tag.className = "trace-stat";
+            tag.innerHTML = `${s.label} <strong>${s.value}</strong>`;
+            wrap.appendChild(tag);
+          }
+          header.appendChild(wrap);
+        }
+
+        const body = document.createElement("div");
+        body.className = "trace-body";
+        const detail = {};
+        if (ev.text) detail.text = ev.text;
+        if (ev.raw && Object.keys(ev.raw).length) detail.raw = ev.raw;
+        const pre = document.createElement("pre");
+        pre.textContent = safeStringify(Object.keys(detail).length ? detail : ev);
+        body.appendChild(pre);
+
+        header.addEventListener("click", () => trace.classList.toggle("open"));
+
+        trace.appendChild(header);
+        trace.appendChild(body);
+        rail.appendChild(trace);
+      }
+
+      function renderEvent(ev) {
+        if (typeof ev.sequence === "number") {
+          lastSequenceSeen = Math.max(lastSequenceSeen, ev.sequence);
+        }
+        if (ev.source === "agent_stream" && ev.kind === "delta") {
+          appendAssistantDelta(ev);
+        } else if (ev.source === "user" && ev.kind === "steer") {
+          appendUserBubble(ev);
+        } else {
+          appendTrace(ev);
+        }
+        lastEventTime = ev.created_at || lastEventTime;
+        countSeen += 1;
+        eventCount.textContent = countSeen;
+      }
+
+      function applyStatusClass(status) {
+        statusLabel.classList.remove(
+          "status-completed", "status-failed", "status-running",
+          "status-queued", "status-pending"
+        );
+        statusLabel.classList.add("status-" + (status || "pending"));
+      }
+      applyStatusClass(statusNode.textContent.trim());
+
+      const initial = JSON.parse(document.getElementById("events-data").textContent || "[]");
+      for (const ev of initial) renderEvent(ev);
+
+      const streamUrl = new URL("{% url 'ctf:thread_stream' thread.pk %}", window.location.origin);
+      streamUrl.searchParams.set("after", String(lastSequenceSeen));
+      const sse = new EventSource(streamUrl.toString());
+
+      sse.addEventListener("stream", (message) => {
+        renderEvent(JSON.parse(message.data));
+      });
+
+      sse.addEventListener("cost", (message) => {
+        const payload = JSON.parse(message.data);
+        if (payload.cost && Object.prototype.hasOwnProperty.call(payload.cost, "usd")) {
+          const v = parseUsd(payload.cost.usd);
+          if (v != null) {
+            runningCostUsd = v;
+            costNode.textContent = payload.cost.usd;
+            updateAssistantMeta();
+          }
+        }
+      });
+
+      sse.addEventListener("status", (message) => {
+        const payload = JSON.parse(message.data);
+        statusNode.textContent = payload.status;
+        applyStatusClass(payload.status);
+        sse.close();
+      });
+    })();
+  </script>
+{% endblock %}

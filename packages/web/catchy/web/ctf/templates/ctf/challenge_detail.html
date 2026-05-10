@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}{{ challenge.challenge_id }} — {{ ctf.title }}{% endblock %}
+
+{% block content %}
+  <div class="crumbs reveal">
+    <a href="{% url 'ctf:index' %}">Index</a>
+    <span class="sep">/</span>
+    <a href="{{ ctf.get_absolute_url }}">{{ ctf.title }}</a>
+    <span class="sep">/</span>
+    <span class="now">{{ challenge.challenge_id }}</span>
+  </div>
+
+  <div class="page-head">
+    <div class="title">
+      <div class="muted" style="font-size: 13px; margin-bottom: 12px;">
+        Challenge · <span class="mono">{{ challenge.challenge_id }}</span>
+      </div>
+      <h1 class="display reveal" style="margin: 0;">{{ challenge.challenge_id }}</h1>
+    </div>
+    <div class="actions">
+      {% if can_init %}
+        <a class="btn" href="{% url 'ctf:challenge_update' ctf.slug challenge.challenge_id %}">Edit</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid-2 reveal" style="display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 56px; align-items: start;">
+    <div style="min-width: 0;">
+      {% if challenge.description %}
+        <section style="margin-bottom: 56px;">
+          {{ challenge.description|json_script:"challenge-description-md" }}
+          <article class="prose" data-md-from="challenge-description-md"></article>
+        </section>
+      {% endif %}
+
+      {% if challenge.webhook %}
+        <section style="margin-bottom: 40px;">
+          <div class="section-head" style="margin-bottom: 12px;">
+            <h2 style="font-size: clamp(20px, 2vw, 24px);">Webhook</h2>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span>endpoint</span><span class="muted">readonly</span></div>
+            <pre>{{ challenge.webhook }}</pre>
+          </div>
+        </section>
+      {% endif %}
+
+      {% if challenge.config %}
+        <section style="margin-bottom: 40px;">
+          <div class="section-head" style="margin-bottom: 12px;">
+            <h2 style="font-size: clamp(20px, 2vw, 24px);">Config</h2>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><span>{{ challenge.challenge_id }}.yaml</span><span class="muted">readonly</span></div>
+            <pre>{{ challenge.config }}</pre>
+          </div>
+        </section>
+      {% endif %}
+
+      <section>
+        <div class="section-head" style="margin-bottom: 16px;">
+          <h2>Threads</h2>
+          <span class="meta">{{ threads|length }} run{{ threads|length|pluralize }}</span>
+        </div>
+        <ul class="idx-list">
+          {% for thread in threads %}
+            <li class="idx-row" onclick="window.location='{{ thread.get_absolute_url }}'">
+              <span class="idx-num">{{ forloop.counter|stringformat:"03d" }}</span>
+              <div class="idx-title">
+                <a href="{{ thread.get_absolute_url }}">{{ thread }}</a>
+                {% if thread.agent %}<span class="idx-desc"><span class="mono muted">{{ thread.agent.name }}</span></span>{% endif %}
+              </div>
+              <span class="idx-meta">
+                <span class="status status-{{ thread.status }}">{{ thread.status }}</span>
+                <span class="mono muted">${{ thread.latest_cost_usd }}</span>
+              </span>
+              
+            </li>
+          {% empty %}
+            <li><div class="empty">No threads yet.</div></li>
+          {% endfor %}
+        </ul>
+      </section>
+    </div>
+
+    {% if can_init %}
+      <aside style="min-width: 0;">
+        <div class="panel" style="position: sticky; top: 96px;">
+          <div class="panel-head">
+            <span>Start a thread</span>
+            <span class="muted">{{ challenge.challenge_id }}</span>
+          </div>
+          <div class="panel-body">
+            <form method="post"
+                  action="{% url 'ctf:thread_create' ctf.slug challenge.challenge_id %}"
+                  class="editorial">
+              {% csrf_token %}
+              {{ thread_form.as_p }}
+              <button type="submit" class="btn btn-primary btn-block" style="margin-top: 8px;">
+                Run thread
+              </button>
+            </form>
+          </div>
+        </div>
+      </aside>
+    {% endif %}
+  </div>
+
+  <style>
+    @media (max-width: 980px) {
+      main.page > .container > div[class~="grid-2"] {
+        grid-template-columns: 1fr !important;
+        gap: 40px !important;
+      }
+    }
+  </style>
+{% endblock %}

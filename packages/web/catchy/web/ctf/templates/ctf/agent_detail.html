@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}{{ agent.name }} — Agents{% endblock %}
+
+{% block content %}
+  <div class="crumbs reveal">
+    <a href="{% url 'ctf:index' %}">Index</a>
+    <span class="sep">/</span>
+    <a href="{% url 'ctf:agent_list' %}">Agents</a>
+    <span class="sep">/</span>
+    <span class="now">{{ agent.slug }}</span>
+  </div>
+
+  <div class="page-head">
+    <div class="title">
+      <h1 class="display reveal" style="margin: 0;">{{ agent.name }}</h1>
+      <div class="row" style="margin-top: 18px;">
+        {% if resolves %}
+          <span class="status status-completed">resolver ok</span>
+        {% else %}
+          <span class="status status-failed">resolver failed</span>
+        {% endif %}
+        <span class="muted" style="font-size: 13px;">/{{ agent.slug }}</span>
+      </div>
+    </div>
+    <div class="actions">
+      <a class="btn" href="{% url 'ctf:agent_update' agent.slug %}">Edit YAML</a>
+    </div>
+  </div>
+
+  <section class="reveal">
+    <div class="section-head" style="margin-bottom: 16px;">
+      <h2>Stored YAML</h2>
+      <span class="meta">readonly</span>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <span>{{ agent.slug }}.yaml</span>
+        <span class="muted">stored</span>
+      </div>
+      <pre>{{ agent.yaml }}</pre>
+    </div>
+  </section>
+{% endblock %}

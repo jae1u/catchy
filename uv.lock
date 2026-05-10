@@ -7,6 +7,7 @@ members = [
     "catchy",
     "catchy-codex",
     "catchy-core",
+    "catchy-web",
 ]
 
 [[package]]
@@ -25,6 +26,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/3e/38/7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/antlr4-python3-runtime-4.9.3.tar.gz", hash = "sha256:f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b", size = 117034, upload-time = "2021-11-06T17:52:23.524Z" }
 
 [[package]]
+name = "asgiref"
+version = "3.11.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/63/40/f03da1264ae8f7cfdbf9146542e5e7e8100a4c66ab48e791df9a03d3f6c0/asgiref-3.11.1.tar.gz", hash = "sha256:5f184dc43b7e763efe848065441eac62229c9f7b0475f41f80e207a114eda4ce", size = 38550, upload-time = "2026-02-03T13:30:14.33Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5c/0a/a72d10ed65068e115044937873362e6e32fab1b7dce0046aeb224682c989/asgiref-3.11.1-py3-none-any.whl", hash = "sha256:e8667a091e69529631969fd45dc268fa79b99c92c5fcdda727757e52146ec133", size = 24345, upload-time = "2026-02-03T13:30:13.039Z" },
+]
+
+[[package]]
 name = "catchy"
 version = "0.1.0"
 source = { virtual = "." }
@@ -33,6 +43,8 @@ source = { virtual = "." }
 dev = [
     { name = "catchy-codex" },
     { name = "catchy-core" },
+    { name = "catchy-web" },
+    { name = "django-types" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-recording" },
@@ -46,6 +58,8 @@ dev = [
 dev = [
     { name = "catchy-codex", editable = "packages/codex" },
     { name = "catchy-core", editable = "packages/core" },
+    { name = "catchy-web", editable = "packages/web" },
+    { name = "django-types", specifier = ">=0.24.0" },
     { name = "pyright", specifier = ">=1.1.409" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-recording", specifier = ">=0.13.4" },
@@ -63,6 +77,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "omegaconf" },
     { name = "openai-codex-app-server-sdk" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
@@ -72,6 +87,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "openai-codex-app-server-sdk", git = "https://github.com/openai/codex.git?subdirectory=sdk%2Fpython&rev=79ad209ce6cade1089cdbe4dbda8835731d5af15" },
+    { name = "pydantic", specifier = ">=2.13.4" },
 ]
 
 [[package]]
@@ -87,6 +103,31 @@ dependencies = [
 requires-dist = [
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
+]
+
+[[package]]
+name = "catchy-web"
+version = "0.1.0"
+source = { editable = "packages/web" }
+dependencies = [
+    { name = "catchy-codex" },
+    { name = "catchy-core" },
+    { name = "django" },
+    { name = "gunicorn" },
+    { name = "omegaconf" },
+    { name = "tzdata" },
+    { name = "whitenoise" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "catchy-codex", editable = "packages/codex" },
+    { name = "catchy-core", editable = "packages/core" },
+    { name = "django", specifier = ">=6.0,<6.1" },
+    { name = "gunicorn", specifier = ">=23.0.0" },
+    { name = "omegaconf", specifier = ">=2.3.0" },
+    { name = "tzdata", specifier = ">=2026.2" },
+    { name = "whitenoise", specifier = ">=6.9.0" },
 ]
 
 [[package]]
@@ -149,6 +190,32 @@ wheels = [
 ]
 
 [[package]]
+name = "django"
+version = "6.0.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "asgiref" },
+    { name = "sqlparse" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5e/f1/bf85f0d29ef76abf901f193fe8fef4769d3da7794197832bc30151c071d8/django-6.0.5.tar.gz", hash = "sha256:bc6d6872e98a2864c836e42edd644b362db311147dd5aa8d5b82ba7a032f5269", size = 10924131, upload-time = "2026-05-05T13:54:39.329Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/5b/1328f8b84fce040c404f76822bf8c57d254e368e8cbd8bd67ec2b26d75f5/django-6.0.5-py3-none-any.whl", hash = "sha256:9d58a7cb49244e74c8e161d5e403a46d6209f1009ba40f5a66d6aa0d0786a8f0", size = 8368680, upload-time = "2026-05-05T13:54:33.532Z" },
+]
+
+[[package]]
+name = "django-types"
+version = "0.24.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "types-psycopg2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d7/7b/8e05b8631fa7de84038d4f24fa57e983107aff889a6d88a9c40a21e15d1c/django_types-0.24.0.tar.gz", hash = "sha256:af903de8b9ee963b7594459a7a20cb8eaaab176ae2b3244ecaa089e0c570b0d1", size = 208426, upload-time = "2026-04-22T22:19:01.999Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2f/ab/f5c37ecc08c396df62579246597796697b58253c8b30206870e8d0f644d0/django_types-0.24.0-py3-none-any.whl", hash = "sha256:ddb478ca733e0dde5475118dd59ab340156980f9659fd92de2083326ae96100a", size = 379436, upload-time = "2026-04-22T22:19:03.368Z" },
+]
+
+[[package]]
 name = "docker"
 version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -160,6 +227,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/91/9b/4a2ea29aeba62471211598dac5d96825bb49348fa07e906ea930394a83ce/docker-7.1.0.tar.gz", hash = "sha256:ad8c70e6e3f8926cb8a92619b832b4ea5299e2831c14284663184e200546fa6c", size = 117834, upload-time = "2024-05-23T11:13:57.216Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl", hash = "sha256:c96b93b7f0a746f9e77d325bcfb87422a3d8bd4f03136ae8a85b37f1898d5fc0", size = 147774, upload-time = "2024-05-23T11:13:55.01Z" },
+]
+
+[[package]]
+name = "gunicorn"
+version = "26.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6d/b7/a4a3f632f823e432ce6bc65f62961b7980c898c77f075a2f7118cb3846fe/gunicorn-26.0.0.tar.gz", hash = "sha256:ca9346f85e3a4aeeb64d491045c16b9a35647abd37ea15efe53080eb8b090baf", size = 727286, upload-time = "2026-05-05T06:38:25.529Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e6/40/9c2384fc2be4ad25dd4a49decd5ad9ea5a3639814c11bd40ab77cb9f0a14/gunicorn-26.0.0-py3-none-any.whl", hash = "sha256:40233d26a5f0d1872916188c276e21641155111c2853f0c2cd55260aec0d24fc", size = 212009, upload-time = "2026-05-05T06:38:23.007Z" },
 ]
 
 [[package]]
@@ -526,6 +605,15 @@ wheels = [
 ]
 
 [[package]]
+name = "sqlparse"
+version = "0.5.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/90/76/437d71068094df0726366574cf3432a4ed754217b436eb7429415cf2d480/sqlparse-0.5.5.tar.gz", hash = "sha256:e20d4a9b0b8585fdf63b10d30066c7c94c5d7a7ec47c889a2d83a3caa93ff28e", size = 120815, upload-time = "2025-12-19T07:17:45.073Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/4b/359f28a903c13438ef59ebeee215fb25da53066db67b305c125f1c6d2a25/sqlparse-0.5.5-py3-none-any.whl", hash = "sha256:12a08b3bf3eec877c519589833aed092e2444e68240a3577e8e26148acc7b1ba", size = 46138, upload-time = "2025-12-19T07:17:46.573Z" },
+]
+
+[[package]]
 name = "textual"
 version = "8.2.5"
 source = { registry = "https://pypi.org/simple" }
@@ -540,6 +628,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/62/1e/1eedc5bac184d00aaa5f9a99095f7e266af3ec46fa926c1051be5d358da1/textual-8.2.5.tar.gz", hash = "sha256:6c894e65a879dadb4f6cf46ddcfedb0173ff7e0cb1fe605ff7b357a597bdbc90", size = 1851596, upload-time = "2026-04-30T08:02:58.956Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cd/01/c4555f9c8a692ff83d84930150540f743ce94c89234f9e9a15ff4baba3a8/textual-8.2.5-py3-none-any.whl", hash = "sha256:247d2aa2faf222749c321f88a736247f37ee2c023604079c7490bfacddfcd4b2", size = 727050, upload-time = "2026-04-30T08:03:01.421Z" },
+]
+
+[[package]]
+name = "types-psycopg2"
+version = "2.9.21.20260509"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/9e/a78cffd63e14c45fc05664c42739b2b15938acff92ca59e22b22ced5695e/types_psycopg2-2.9.21.20260509.tar.gz", hash = "sha256:0422105f691a409e9d8048c2205aca9d694b70823248c6614393444017e9f088", size = 27215, upload-time = "2026-05-09T04:58:40.256Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/be/b3/f4d11df63430d7e14b2889caf73f6f6bf9147a51d866ce2da4c07d9f3c8b/types_psycopg2-2.9.21.20260509-py3-none-any.whl", hash = "sha256:69f6dae384bbea830dff23621936423035db152af901331e6f9c46f7c4f4b24f", size = 24940, upload-time = "2026-05-09T04:58:39.208Z" },
 ]
 
 [[package]]
@@ -561,6 +658,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/55/e3/70399cb7dd41c10ac53367ae42139cf4b1ca5f36bb3dc6c9d33acdb43655/typing_inspection-0.4.2.tar.gz", hash = "sha256:ba561c48a67c5958007083d386c3295464928b01faa735ab8547c5692e87f464", size = 75949, upload-time = "2025-10-01T02:14:41.687Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/9b/47798a6c91d8bdb567fe2698fe81e0c6b7cb7ef4d13da4114b41d239f65d/typing_inspection-0.4.2-py3-none-any.whl", hash = "sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7", size = 14611, upload-time = "2025-10-01T02:14:40.154Z" },
+]
+
+[[package]]
+name = "tzdata"
+version = "2026.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/19/1b9b0e29f30c6d35cb345486df41110984ea67ae69dddbc0e8a100999493/tzdata-2026.2.tar.gz", hash = "sha256:9173fde7d80d9018e02a662e168e5a2d04f87c41ea174b139fbef642eda62d10", size = 198254, upload-time = "2026-04-24T15:22:08.651Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ce/e4/dccd7f47c4b64213ac01ef921a1337ee6e30e8c6466046018326977efd95/tzdata-2026.2-py2.py3-none-any.whl", hash = "sha256:bbe9af844f658da81a5f95019480da3a89415801f6cc966806612cc7169bffe7", size = 349321, upload-time = "2026-04-24T15:22:05.876Z" },
 ]
 
 [[package]]
@@ -592,6 +698,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b3/07/bcfd5ebd7cb308026ab78a353e091bd699593358be49197d39d004e5ad83/vcrpy-8.1.1.tar.gz", hash = "sha256:58e3053e33b423f3594031cb758c3f4d1df931307f1e67928e30cf352df7709f", size = 85770, upload-time = "2026-01-04T19:22:03.886Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3a/d7/f79b05a5d728f8786876a7d75dfb0c5cae27e428081b2d60152fb52f155f/vcrpy-8.1.1-py3-none-any.whl", hash = "sha256:2d16f31ad56493efb6165182dd99767207031b0da3f68b18f975545ede8ac4b9", size = 42445, upload-time = "2026-01-04T19:22:02.532Z" },
+]
+
+[[package]]
+name = "whitenoise"
+version = "6.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cb/2a/55b3f3a4ec326cd077c1c3defeee656b9298372a69229134d930151acd01/whitenoise-6.12.0.tar.gz", hash = "sha256:f723ebb76a112e98816ff80fcea0a6c9b8ecde835f8ddda25df7a30a3c2db6ad", size = 26841, upload-time = "2026-02-27T00:05:42.028Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/db/eb/d5583a11486211f3ebd4b385545ae787f32363d453c19fffd81106c9c138/whitenoise-6.12.0-py3-none-any.whl", hash = "sha256:fc5e8c572e33ebf24795b47b6a7da8da3c00cff2349f5b04c02f28d0cc5a3cc2", size = 20302, upload-time = "2026-02-27T00:05:40.086Z" },
 ]
 
 [[package]]

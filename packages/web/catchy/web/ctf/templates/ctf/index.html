@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block content %}
+  {% if user.is_authenticated %}
+    {# ===== AUTH'D DASHBOARD ===== #}
+    <section class="hero" style="padding: 56px 0 32px;">
+      <h1 class="display reveal" style="margin: 0;">
+        Hi, <em>{{ user.username|default:"operator" }}</em>.
+      </h1>
+      <p class="lead reveal" style="margin: 24px 0 0;">
+        Your workbench, ready when you are.
+      </p>
+      <div class="row reveal" style="margin-top: 28px;">
+        <a class="btn btn-primary" href="{% url 'ctf:ctf_create' %}">New CTF</a>
+        <a class="btn" href="{% url 'ctf:agent_list' %}">Manage agents</a>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-head">
+        <h2>CTFs</h2>
+        <span class="meta">{{ ctfs|length }} item{{ ctfs|length|pluralize }}</span>
+      </div>
+      <ul class="idx-list">
+        {% for ctf in ctfs %}
+          <li class="idx-row" onclick="window.location='{{ ctf.get_absolute_url }}'">
+            <span class="idx-num">{{ forloop.counter|stringformat:"03d" }}</span>
+            <div class="idx-title">
+              <a href="{{ ctf.get_absolute_url }}">{{ ctf.title }}</a>
+              {% if ctf.description %}
+                <span class="idx-desc">{{ ctf.description|striptags|truncatechars:160 }}</span>
+              {% endif %}
+            </div>
+            <span class="idx-meta">
+              <span class="mono muted">/{{ ctf.slug }}</span>
+            </span>
+            
+          </li>
+        {% empty %}
+          <li><div class="empty">No CTFs yet. Create one to get started.</div></li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-head">
+        <h2>Recent threads</h2>
+        <span class="meta">{{ threads|length }} thread{{ threads|length|pluralize }}</span>
+      </div>
+      <ul class="idx-list">
+        {% for thread in threads %}
+          <li class="idx-row" onclick="window.location='{{ thread.get_absolute_url }}'">
+            <span class="idx-num">{{ forloop.counter|stringformat:"03d" }}</span>
+            <div class="idx-title">
+              <a href="{{ thread.get_absolute_url }}">{{ thread }}</a>
+              <span class="idx-desc">
+                {{ thread.ctf.title }}{% if thread.agent %} · <span class="mono muted">{{ thread.agent.name }}</span>{% endif %}
+              </span>
+            </div>
+            <span class="idx-meta">
+              <span class="status status-{{ thread.status }}">{{ thread.status }}</span>
+              {% if thread.is_public %}<span class="status status-public">public</span>{% endif %}
+              <span class="mono muted">${{ thread.latest_cost_usd }}</span>
+            </span>
+            
+          </li>
+        {% empty %}
+          <li><div class="empty">No threads yet.</div></li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% else %}
+    {# ===== PUBLIC LANDING — threads-first ===== #}
+    <section id="public-threads" aria-label="Public threads" style="padding-top: 32px;">
+      {% for group in public_thread_groups %}
+        <div class="reveal" style="margin-bottom: 56px;">
+          <div class="between" style="padding-bottom: 12px; margin-bottom: 0; border-bottom: 1px solid var(--ink);">
+            <h3 class="h-section" style="font-size: clamp(22px, 2.8vw, 30px);">{{ group.ctf.title }}</h3>
+            <div class="muted" style="font-size: 13px;">
+              {{ group.challenges|length }} challenge{{ group.challenges|length|pluralize }}
+              · {{ group.thread_count }} run{{ group.thread_count|pluralize }}
+            </div>
+          </div>
+
+          {% for ch in group.challenges %}
+            <div style="margin-top: 28px;">
+              <div class="between" style="padding-bottom: 8px; margin-bottom: 0; border-bottom: 1px solid var(--rule-soft);">
+                <div class="row" style="gap: 14px; align-items: baseline;">
+                  <span class="mono muted" style="font-size: 12px;">{{ forloop.counter|stringformat:"02d" }}</span>
+                  <span style="font-family: var(--serif); font-size: 18px; letter-spacing: -0.01em;">{{ ch.challenge.challenge_id }}</span>
+                </div>
+                <span class="muted" style="font-size: 12px;">{{ ch.threads|length }} run{{ ch.threads|length|pluralize }}</span>
+              </div>
+              <ul class="idx-list" style="border-top: 0;">
+                {% for thread in ch.threads %}
+                  <li class="idx-row" onclick="window.location='{{ thread.get_absolute_url }}'">
+                    <span class="idx-num">{{ forloop.counter|stringformat:"03d" }}</span>
+                    <div class="idx-title">
+                      <a href="{{ thread.get_absolute_url }}">{{ thread }}</a>
+                      {% if thread.agent %}
+                        <span class="idx-desc"><span class="mono muted">{{ thread.agent.name }}</span></span>
+                      {% endif %}
+                    </div>
+                    <span class="idx-meta">
+                      <span class="status status-{{ thread.status }}">{{ thread.status }}</span>
+                      <span class="mono muted">${{ thread.latest_cost_usd }}</span>
+                    </span>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endfor %}
+        </div>
+      {% empty %}
+        <div class="empty">No public threads yet.</div>
+      {% endfor %}
+    </section>
+
+    <style>
+      .public-intro {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 40px 0 28px;
+        margin-bottom: 32px;
+        border-bottom: 1px solid var(--ink);
+      }
+      @media (max-width: 600px) {
+        .public-intro { flex-direction: column; align-items: stretch; }
+      }
+    </style>
+  {% endif %}
+{% endblock %}

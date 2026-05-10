@@ -1,0 +1,411 @@
+from __future__ import annotations
+
+import secrets
+from contextlib import contextmanager
+from contextvars import ContextVar
+from decimal import Decimal
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Iterator
+
+from django.conf import settings as django_settings
+from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
+from django.db import models
+from django.urls import reverse
+from django.utils.text import slugify
+from django.utils import timezone
+from omegaconf import OmegaConf
+from omegaconf.errors import InterpolationResolutionError
+
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractUser
+
+_secret_resolver_user: ContextVar[Any | None] = ContextVar(
+    "catchy_secret_resolver_user",
+    default=None,
+)
+
+THREAD_NAME_ADJECTIVES = [
+    "agile",
+    "bright",
+    "calm",
+    "clever",
+    "curious",
+    "eager",
+    "electric",
+    "fearless",
+    "gentle",
+    "golden",
+    "hidden",
+    "lucid",
+    "nimble",
+    "quiet",
+    "rapid",
+    "sharp",
+    "steady",
+    "vivid",
+]
+THREAD_NAME_NOUNS = [
+    "beacon",
+    "cipher",
+    "comet",
+    "delta",
+    "ember",
+    "engine",
+    "harbor",
+    "key",
+    "lantern",
+    "matrix",
+    "orbit",
+    "packet",
+    "puzzle",
+    "signal",
+    "vector",
+    "waypoint",
+]
+
+
+def generate_thread_name() -> str:
+    adjective = secrets.choice(THREAD_NAME_ADJECTIVES)
+    noun = secrets.choice(THREAD_NAME_NOUNS)
+    suffix = secrets.randbelow(10_000)
+    return f"{adjective}-{noun}-{suffix:04d}"
+
+
+class TimeStampedModel(models.Model):
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class Secret(TimeStampedModel):
+    name = models.SlugField(unique=True)
+    label = models.CharField(max_length=200, blank=True)
+    value = models.TextField()
+    allowed_groups = models.ManyToManyField(Group, blank=True, related_name="secrets")
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_secrets",
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.label or self.name
+
+    def can_view(self, user: AbstractUser) -> bool:
+        return _can_access_grouped_object(user, self.allowed_groups)
+
+
+class AgentConfiguration(TimeStampedModel):
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    yaml = models.TextField()
+    view_groups = models.ManyToManyField(
+        Group, blank=True, related_name="viewable_agent_configurations"
+    )
+    use_groups = models.ManyToManyField(
+        Group, blank=True, related_name="usable_agent_configurations"
+    )
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_agent_configurations",
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def get_absolute_url(self) -> str:
+        return reverse("ctf:agent_detail", kwargs={"slug": self.slug})
+
+    def can_view(self, user: AbstractUser) -> bool:
+        return _can_access_grouped_object(user, self.view_groups)
+
+    def can_use(self, user: AbstractUser) -> bool:
+        return _can_access_grouped_object(user, self.use_groups)
+
+    def resolved_yaml(self, *, user: Any | None = None) -> str:
+        register_secret_resolver()
+        config = OmegaConf.create(self.yaml)
+        with resolve_secrets_as(user):
+            try:
+                return OmegaConf.to_yaml(config, resolve=True)
+            except InterpolationResolutionError as exc:
+                _raise_permission_denied_from_interpolation(exc)
+                raise
+
+    def resolved_mapping(self, *, user: Any | None = None) -> dict[str, Any]:
+        register_secret_resolver()
+        with resolve_secrets_as(user):
+            try:
+                data = OmegaConf.to_container(OmegaConf.create(self.yaml), resolve=True)
+            except InterpolationResolutionError as exc:
+                _raise_permission_denied_from_interpolation(exc)
+                raise
+        if not isinstance(data, dict):
+            raise ValueError("agent YAML must resolve to a mapping")
+        return {str(key): value for key, value in data.items()}
+
+
+class Ctf(TimeStampedModel):
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    settings = models.TextField(blank=True, default="")
+    view_groups = models.ManyToManyField(
+        Group, blank=True, related_name="viewable_ctfs"
+    )
+    init_groups = models.ManyToManyField(
+        Group, blank=True, related_name="initializable_ctfs"
+    )
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_ctfs",
+    )
+
+    class Meta:
+        verbose_name = "CTF"
+        verbose_name_plural = "CTFs"
+        ordering = ["title"]
+
+    def __str__(self) -> str:
+        return self.title
+
+    def get_absolute_url(self) -> str:
+        return reverse("ctf:ctf_detail", kwargs={"slug": self.slug})
+
+    def can_view(self, user: AbstractUser) -> bool:
+        return _can_access_grouped_object(user, self.view_groups)
+
+    def can_init_thread(self, user: AbstractUser) -> bool:
+        return _can_access_grouped_object(user, self.init_groups)
+
+    def settings_mapping(self) -> dict[str, Any]:
+        return _yaml_mapping(self.settings)
+
+
+def challenge_source_upload_path(instance: Challenge, filename: str) -> str:
+    return f"ctfs/{instance.ctf.slug}/challenges/{instance.challenge_id}/{filename}"
+
+
+class Challenge(TimeStampedModel):
+    ctf = models.ForeignKey(Ctf, on_delete=models.CASCADE, related_name="challenges")
+    challenge_id = models.SlugField()
+    description = models.TextField(blank=True)
+    webhook = models.TextField(blank=True, default="")
+    config = models.TextField(blank=True, default="")
+    source_archive = models.FileField(upload_to=challenge_source_upload_path)
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_challenges",
+    )
+
+    class Meta:
+        unique_together = [("ctf", "challenge_id")]
+        ordering = ["ctf__title", "challenge_id"]
+
+    def __str__(self) -> str:
+        return f"{self.ctf}: {self.challenge_id}"
+
+    def get_absolute_url(self) -> str:
+        return reverse(
+            "ctf:challenge_detail",
+            kwargs={"ctf_slug": self.ctf.slug, "challenge_id": self.challenge_id},
+        )
+
+    def webhook_mapping(self) -> dict[str, Any]:
+        return _yaml_mapping(self.webhook)
+
+    def config_mapping(self) -> dict[str, Any]:
+        return _yaml_mapping(self.config)
+
+
+class Thread(TimeStampedModel):
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    ctf = models.ForeignKey(Ctf, on_delete=models.CASCADE, related_name="threads")
+    challenge = models.ForeignKey(
+        Challenge, on_delete=models.PROTECT, related_name="threads"
+    )
+    agent = models.ForeignKey(
+        AgentConfiguration, on_delete=models.PROTECT, related_name="threads"
+    )
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_threads",
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.QUEUED
+    )
+    name = models.SlugField(max_length=80, blank=True, default=generate_thread_name)
+    task_result_id = models.CharField(max_length=64, blank=True)
+    thread_root = models.CharField(max_length=500, blank=True)
+    workspace_path = models.CharField(max_length=500, blank=True)
+    metadata_path = models.CharField(max_length=500, blank=True)
+    error = models.TextField(blank=True)
+    latest_cost_usd = models.DecimalField(
+        max_digits=12, decimal_places=6, default=Decimal("0")
+    )
+    latest_cost = models.JSONField(default=dict, blank=True)
+    is_public = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.name or f"{self.challenge.challenge_id} #{self.pk}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        original_name = self.name
+        self.name = slugify(self.name)[:80] if self.name else generate_thread_name()
+        if not self.name:
+            self.name = generate_thread_name()
+        if self.name != original_name and kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = {*kwargs["update_fields"], "name"}
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self) -> str:
+        return reverse("ctf:thread_detail", kwargs={"pk": self.pk})
+
+    @property
+    def metadata_directory(self) -> Path | None:
+        return Path(self.metadata_path) if self.metadata_path else None
+
+    def can_view(self, user: AbstractUser) -> bool:
+        return self.is_public or self.ctf.can_view(user)
+
+    def can_publish(self, user: AbstractUser) -> bool:
+        return self.ctf.can_view(user)
+
+
+class StreamEvent(TimeStampedModel):
+    thread = models.ForeignKey(Thread, on_delete=models.CASCADE, related_name="events")
+    sequence = models.PositiveBigIntegerField()
+    dedupe_key = models.CharField(max_length=300)
+    source = models.CharField(max_length=40)
+    kind = models.CharField(max_length=80, blank=True)
+    text = models.TextField(blank=True)
+    raw = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        unique_together = [("thread", "sequence"), ("thread", "dedupe_key")]
+        ordering = ["sequence"]
+
+    def __str__(self) -> str:
+        return f"{self.thread_id}:{self.sequence}:{self.kind}"
+
+
+class SteeringMessage(TimeStampedModel):
+    thread = models.ForeignKey(
+        Thread, on_delete=models.CASCADE, related_name="steering_messages"
+    )
+    created_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_steering_messages",
+    )
+    text = models.TextField()
+    delivered_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.thread_id}:{self.created_at.isoformat()}"
+
+
+class ThreadCostSnapshot(TimeStampedModel):
+    thread = models.ForeignKey(
+        Thread, on_delete=models.CASCADE, related_name="cost_snapshots"
+    )
+    usd = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal("0"))
+    usage = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+
+def register_secret_resolver() -> None:
+    OmegaConf.register_new_resolver("secret", _resolve_secret, replace=True)
+
+
+@contextmanager
+def resolve_secrets_as(user: Any | None) -> Iterator[None]:
+    token = _secret_resolver_user.set(user)
+    try:
+        yield
+    finally:
+        _secret_resolver_user.reset(token)
+
+
+def _resolve_secret(name: str) -> str:
+    user = _secret_resolver_user.get()
+    if user is None:
+        raise PermissionDenied("secret resolver requires an authenticated user")
+
+    secret = Secret.objects.prefetch_related("allowed_groups").get(name=name)
+    if not secret.can_view(user):
+        raise PermissionDenied(f"secret is not accessible: {name}")
+    return secret.value
+
+
+def _raise_permission_denied_from_interpolation(
+    exc: InterpolationResolutionError,
+) -> None:
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, PermissionDenied):
+            raise current
+        current = current.__cause__ or current.__context__
+    if str(exc).startswith("PermissionDenied raised while resolving interpolation"):
+        raise PermissionDenied(str(exc)) from exc
+
+
+def _yaml_mapping(value: str) -> dict[str, Any]:
+    if not value.strip():
+        return {}
+    data = OmegaConf.to_container(OmegaConf.create(value), resolve=True)
+    if not isinstance(data, dict):
+        raise ValueError("YAML value must resolve to a mapping")
+    return {str(key): item for key, item in data.items()}
+
+
+def _can_access_grouped_object(
+    user: AbstractUser,
+    groups: models.Manager[Group],
+) -> bool:
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    allowed_group_ids = groups.values_list("id", flat=True)
+    if not allowed_group_ids:
+        return True
+    return user.groups.filter(id__in=allowed_group_ids).exists()

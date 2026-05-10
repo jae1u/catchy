@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in — Catchy{% endblock %}
+
+{% block content %}
+  <section class="login-hero">
+    <div class="reveal" style="text-align: center;">
+      <h1 class="display" style="margin: 0;">
+        Welcome <em>back</em>.
+      </h1>
+      <p class="lead" style="max-width: 520px; margin: 28px auto 0;">
+        Pick up where you left off. Sign in to your Catchy workbench.
+      </p>
+    </div>
+
+    <form method="post" class="editorial reveal" style="margin: 56px auto 0; max-width: 380px;">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit" class="btn btn-primary btn-block" style="margin-top: 12px;">
+        Continue →
+      </button>
+    </form>
+  </section>
+
+  <style>
+    .login-hero {
+      padding: 72px 0 32px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .login-hero .display { text-align: center; }
+    @media (max-width: 720px) {
+      .login-hero { padding-top: 48px; }
+    }
+  </style>
+{% endblock %}

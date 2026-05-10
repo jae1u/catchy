@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}{{ ctf.title }} — Catchy{% endblock %}
+
+{% block content %}
+  <div class="crumbs reveal">
+    <a href="{% url 'ctf:index' %}">Index</a>
+    <span class="sep">/</span>
+    <a href="{% url 'ctf:index' %}">CTFs</a>
+    <span class="sep">/</span>
+    <span class="now">{{ ctf.slug }}</span>
+  </div>
+
+  <div class="page-head">
+    <div class="title">
+      <div class="muted" style="font-size: 13px; margin-bottom: 12px;">
+        CTF · <span class="mono">{{ ctf.slug }}</span>
+      </div>
+      <h1 class="display reveal" style="margin: 0;">{{ ctf.title }}</h1>
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="{% url 'ctf:challenge_create' ctf.slug %}">New challenge</a>
+    </div>
+  </div>
+
+  {% if ctf.description %}
+    <section class="reveal" style="margin-bottom: 56px;">
+      {{ ctf.description|json_script:"ctf-description-md" }}
+      <article class="prose" data-md-from="ctf-description-md"></article>
+    </section>
+  {% endif %}
+
+  <section class="reveal">
+    <div class="section-head">
+      <h2>Challenges</h2>
+      <span class="meta">{{ challenges|length }} item{{ challenges|length|pluralize }}</span>
+    </div>
+
+    <ul class="idx-list">
+      {% for challenge in challenges %}
+        <li class="idx-row" onclick="window.location='{{ challenge.get_absolute_url }}'">
+          <span class="idx-num">{{ forloop.counter|stringformat:"03d" }}</span>
+          <div class="idx-title">
+            <a href="{{ challenge.get_absolute_url }}">{{ challenge.challenge_id }}</a>
+            {% if challenge.description %}
+              <span class="idx-desc">{{ challenge.description|striptags|truncatechars:200 }}</span>
+            {% endif %}
+          </div>
+          <span class="idx-meta"></span>
+          
+        </li>
+      {% empty %}
+        <li><div class="empty">No challenges yet.</div></li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endblock %}
