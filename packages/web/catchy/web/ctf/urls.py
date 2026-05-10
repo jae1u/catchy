@@ -14,6 +14,7 @@ urlpatterns = [
     path("agents/<slug:slug>/edit/", views.agent_update, name="agent_update"),
     path("ctfs/new/", views.ctf_create, name="ctf_create"),
     path("ctfs/<slug:slug>/", views.ctf_detail, name="ctf_detail"),
+    path("ctfs/<slug:slug>/edit/", views.ctf_update, name="ctf_update"),
     path("ctfs/<slug:ctf_slug>/challenges/new/", views.challenge_create, name="challenge_create"),
     path(
         "ctfs/<slug:ctf_slug>/challenges/<slug:challenge_id>/",

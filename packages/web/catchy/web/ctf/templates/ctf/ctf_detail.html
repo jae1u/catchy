@@ -19,6 +19,9 @@
       <h1 class="display reveal" style="margin: 0;">{{ ctf.title }}</h1>
     </div>
     <div class="actions">
+      {% if can_init %}
+        <a class="btn" href="{% url 'ctf:ctf_update' ctf.slug %}">Edit</a>
+      {% endif %}
       <a class="btn btn-primary" href="{% url 'ctf:challenge_create' ctf.slug %}">New challenge</a>
     </div>
   </div>

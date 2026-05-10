@@ -79,6 +79,11 @@ class ChallengeForm(forms.ModelForm):
         help_text="Spoken language the agent should respond in (e.g. English, 한국어). Optional.",
         widget=forms.TextInput(attrs={"placeholder": "English"}),
     )
+    clear_webhook = forms.BooleanField(
+        required=False,
+        label="Remove webhook",
+        help_text="Check to remove the existing webhook from this challenge.",
+    )
     config_yaml = forms.CharField(
         required=False,
         label="Config (YAML)",
@@ -88,7 +93,7 @@ class ChallengeForm(forms.ModelForm):
 
     fieldsets = [
         ("Basics", ["challenge_id", "description", "source_archive"]),
-        ("Webhook", ["webhook_url", "webhook_preferred_language"]),
+        ("Webhook", ["webhook_url", "webhook_preferred_language", "clear_webhook"]),
         ("Advanced", ["config_yaml"]),
     ]
 
@@ -103,15 +108,26 @@ class ChallengeForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.instance.pk:
             webhook_data = _safe_yaml_mapping(self.instance.webhook)
-            self.fields["webhook_url"].initial = webhook_data.get("url", "")
+            existing_webhook_url = str(webhook_data.get("url") or "")
             self.fields["webhook_preferred_language"].initial = webhook_data.get(
                 "preferred_language", ""
             )
+            if existing_webhook_url:
+                self.fields["webhook_url"].help_text = (
+                    "A webhook URL is set. Leave blank to keep it, or enter a new URL to replace."
+                )
+                self.fields["webhook_url"].widget.attrs["placeholder"] = (
+                    "(URL set — leave blank to keep)"
+                )
+            else:
+                self.fields["clear_webhook"].widget = forms.HiddenInput()
             self.fields["config_yaml"].initial = self.instance.config
             self.fields["source_archive"].required = False
             self.fields[
                 "source_archive"
             ].help_text = "Leave blank to keep the existing archive."
+        else:
+            self.fields["clear_webhook"].widget = forms.HiddenInput()
 
     def clean_source_archive(self):
         archive = self.cleaned_data.get("source_archive")
@@ -138,7 +154,14 @@ class ChallengeForm(forms.ModelForm):
         cleaned = super().clean()
         url = (cleaned.get("webhook_url") or "").strip()
         lang = (cleaned.get("webhook_preferred_language") or "").strip()
-        if lang and not url:
+        clear = bool(cleaned.get("clear_webhook"))
+        existing_url = ""
+        if self.instance.pk:
+            existing_url = str(
+                _safe_yaml_mapping(self.instance.webhook).get("url") or ""
+            )
+        effective_url = "" if clear else (url or existing_url)
+        if lang and not effective_url:
             self.add_error(
                 "webhook_url",
                 "Webhook URL is required when a preferred language is set.",
@@ -159,8 +182,12 @@ class ChallengeForm(forms.ModelForm):
         return instance
 
     def _serialize_webhook(self) -> str:
+        if self.cleaned_data.get("clear_webhook"):
+            return ""
         url = (self.cleaned_data.get("webhook_url") or "").strip()
         lang = (self.cleaned_data.get("webhook_preferred_language") or "").strip()
+        if not url and self.instance.pk:
+            url = str(_safe_yaml_mapping(self.instance.webhook).get("url") or "")
         if not url:
             return ""
         payload: dict[str, Any] = {"url": url}

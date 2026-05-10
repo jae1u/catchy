@@ -178,6 +178,25 @@ def ctf_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def ctf_update(request: HttpRequest, slug: str) -> HttpResponse:
+    ctf = get_object_or_404(
+        Ctf.objects.prefetch_related("view_groups", "init_groups"), slug=slug
+    )
+    if not ctf.can_init_thread(request.user):
+        raise PermissionDenied
+    form = CtfForm(request.POST or None, instance=ctf)
+    if request.method == "POST" and form.is_valid():
+        ctf = form.save()
+        messages.success(request, "CTF updated.")
+        return redirect(ctf)
+    return render(
+        request,
+        "ctf/form.html",
+        {"form": form, "title": f"Edit CTF: {ctf.title}"},
+    )
+
+
+@login_required
 def ctf_detail(request: HttpRequest, slug: str) -> HttpResponse:
     ctf = get_object_or_404(
         Ctf.objects.prefetch_related("view_groups", "init_groups"), slug=slug

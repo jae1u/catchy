@@ -237,6 +237,26 @@ class Challenge(TimeStampedModel):
     def config_mapping(self) -> dict[str, Any]:
         return _yaml_mapping(self.config)
 
+    @property
+    def webhook_summary(self) -> dict[str, str] | None:
+        try:
+            mapping = self.webhook_mapping()
+        except Exception:
+            return None
+        if not mapping:
+            return None
+        url = str(mapping.get("url") or "")
+        if "discord.com" in url:
+            provider = "Discord"
+        elif "hooks.slack.com" in url:
+            provider = "Slack"
+        elif url:
+            provider = "Webhook"
+        else:
+            return None
+        language = mapping.get("preferred_language")
+        return {"provider": provider, "language": str(language) if language else ""}
+
 
 class Thread(TimeStampedModel):
     class Status(models.TextChoices):

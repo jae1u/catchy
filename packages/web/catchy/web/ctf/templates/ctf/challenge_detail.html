@@ -17,6 +17,14 @@
         Challenge · <span class="mono">{{ challenge.challenge_id }}</span>
       </div>
       <h1 class="display reveal" style="margin: 0;">{{ challenge.challenge_id }}</h1>
+      {% if challenge.webhook_summary %}
+        <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+          <span class="status status-public">Notifies {{ challenge.webhook_summary.provider }}</span>
+          {% if challenge.webhook_summary.language %}
+            <span class="status">{{ challenge.webhook_summary.language }}</span>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
     <div class="actions">
       {% if can_init %}
@@ -31,18 +39,6 @@
         <section style="margin-bottom: 56px;">
           {{ challenge.description|json_script:"challenge-description-md" }}
           <article class="prose" data-md-from="challenge-description-md"></article>
-        </section>
-      {% endif %}
-
-      {% if challenge.webhook %}
-        <section style="margin-bottom: 40px;">
-          <div class="section-head" style="margin-bottom: 12px;">
-            <h2 style="font-size: clamp(20px, 2vw, 24px);">Webhook</h2>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><span>endpoint</span><span class="muted">readonly</span></div>
-            <pre>{{ challenge.webhook }}</pre>
-          </div>
         </section>
       {% endif %}
 
