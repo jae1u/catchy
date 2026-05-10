@@ -76,6 +76,10 @@ def _new_events() -> list["StreamEvent"]:
     return []
 
 
+def _new_steering_messages() -> list[str]:
+    return []
+
+
 @dataclass(frozen=True)
 class AgentDefinition:
     id: str
@@ -91,9 +95,10 @@ class StreamState:
     webhook: Webhook | None
     thread_root: Path | None = None
     workspace: Path | None = None
-    metadata: Path | None = None
+    metadata_directory: Path | None = None
     status: str = "queued"
     events: list[StreamEvent] = field(default_factory=_new_events)
+    steering_messages: list[str] = field(default_factory=_new_steering_messages)
     started: bool = False
     agent_id: str = ""
     pause_gate: asyncio.Event = field(default_factory=asyncio.Event)
@@ -282,6 +287,55 @@ class CatchyApp(App[None]):
         border: tall #f0883e;
     }
 
+    #steer-label {
+        color: #8b8b8b;
+        padding: 1 0 1 0;
+    }
+
+    #steer-row {
+        height: 3;
+    }
+
+    #steer-input {
+        width: 1fr;
+        margin-right: 1;
+        background: #0a0a0a;
+        color: #ededed;
+        border: tall #262626;
+    }
+
+    #steer-input:focus {
+        border: tall #ededed;
+    }
+
+    #steer-input:disabled {
+        color: #525252;
+        border: tall #1a1a1a;
+    }
+
+    #queue-steer {
+        width: 12;
+        background: #0a0a0a;
+        color: #3b82f6;
+        border: tall #262626;
+    }
+
+    #queue-steer:hover {
+        border: tall #3b82f6;
+    }
+
+    #queue-steer:disabled {
+        color: #525252;
+        border: tall #1a1a1a;
+        background: #0a0a0a;
+    }
+
+    #steer-queue-status {
+        color: #8b8b8b;
+        height: 1;
+        margin-top: 1;
+    }
+
     #settings-block {
         height: auto;
         margin-bottom: 1;
@@ -434,6 +488,14 @@ class CatchyApp(App[None]):
                     with Horizontal(id="controls"):
                         yield Button("▶  Start thread", id="run-selected")
                         yield Button("⏸  Pause", id="pause-selected")
+                    yield Label("Steer message", id="steer-label")
+                    with Horizontal(id="steer-row"):
+                        yield Input(
+                            placeholder="queue guidance for the running thread",
+                            id="steer-input",
+                        )
+                        yield Button("Queue", id="queue-steer")
+                    yield Static("", id="steer-queue-status")
 
             with Vertical(id="content"):
                 with Vertical(id="stream-header"):
@@ -480,6 +542,14 @@ class CatchyApp(App[None]):
     def on_pause_selected_pressed(self) -> None:
         self.action_toggle_pause()
 
+    @on(Input.Submitted, "#steer-input")
+    def on_steer_submitted(self, event: Input.Submitted) -> None:
+        self._queue_steering_message(event.value)
+
+    @on(Button.Pressed, "#queue-steer")
+    def on_queue_steer_pressed(self) -> None:
+        self._queue_steering_message(self.query_one("#steer-input", Input).value)
+
     @on(Select.Changed, "#agent-select")
     def on_agent_changed(self, event: Select.Changed) -> None:
         if event.value == Select.NULL:
@@ -506,7 +576,7 @@ class CatchyApp(App[None]):
 
         state.thread_root = _new_thread_root(state.root)
         state.workspace = state.thread_root / "workspace"
-        state.metadata = state.thread_root / "metadata"
+        state.metadata_directory = state.thread_root / "metadata"
         state.started = True
         state.pause_gate.set()
         self._render_active_stream()
@@ -539,6 +609,30 @@ class CatchyApp(App[None]):
     def action_refresh_active(self) -> None:
         self._render_active_stream()
 
+    def _queue_steering_message(self, raw_message: str) -> None:
+        message = raw_message.strip()
+        if not message:
+            return
+        if not self._states:
+            self._append_event(None, "error", "add a challenge first")
+            return
+
+        index = self._active_index
+        state = self._states[index]
+        if not state.started or state.status in {"queued", "completed", "failed"}:
+            self._append_event(index, "error", "start a thread before steering")
+            return
+
+        state.steering_messages.append(message)
+        self.query_one("#steer-input", Input).value = ""
+        self._append_event(index, "steer", f"queued: {message}")
+        self._sync_controls()
+
+    def _next_steering_message(self, state: StreamState) -> str | None:
+        if not state.steering_messages:
+            return None
+        return state.steering_messages.pop(0)
+
     async def _run_stream(self, *, index: int) -> None:
         state = self._states[index]
         try:
@@ -550,38 +644,56 @@ class CatchyApp(App[None]):
             if (
                 state.thread_root is None
                 or state.workspace is None
-                or state.metadata is None
+                or state.metadata_directory is None
             ):
                 state.thread_root = _new_thread_root(state.root)
                 state.workspace = state.thread_root / "workspace"
-                state.metadata = state.thread_root / "metadata"
+                state.metadata_directory = state.thread_root / "metadata"
             thread_root = state.thread_root
             workspace = state.workspace
-            metadata = state.metadata
+            metadata_directory = state.metadata_directory
             workspace.mkdir(exist_ok=True, parents=True)
-            metadata.mkdir(exist_ok=True, parents=True)
+            metadata_directory.mkdir(exist_ok=True, parents=True)
 
             self._set_status(index, "running")
             self._append_event(index, "status", f"thread: {thread_root}")
             self._append_event(index, "status", f"workspace: {workspace}")
-            self._append_event(index, "status", f"metadata: {metadata}")
+            self._append_event(index, "status", f"metadata: {metadata_directory}")
             stream = agent.stream(
                 challenge=state.challenge,
                 workspace=workspace,
-                metadata=metadata,
+                metadata_directory=metadata_directory,
                 webhook=state.webhook,
-            ).__aiter__()
+            )
+            stream_started = False
             while True:
                 await state.pause_gate.wait()
+                steering_message = (
+                    None if not stream_started else self._next_steering_message(state)
+                )
+                if steering_message is not None:
+                    self._append_event(index, "steer", f"sent: {steering_message}")
+                    self._sync_controls()
                 try:
-                    delta = await stream.__anext__()
+                    delta = await stream.asend(steering_message)
                 except StopAsyncIteration:
                     break
+                stream_started = True
                 self._append_event(index, "delta", delta)
 
+            if state.steering_messages:
+                discarded_count = len(state.steering_messages)
+                state.steering_messages.clear()
+                self._append_event(
+                    index,
+                    "steer",
+                    f"discarded {discarded_count} unsent message(s)",
+                )
             self._set_status(index, "completed")
             self._append_event(index, "status", "completed")
         except Exception as error:
+            if state.steering_messages:
+                state.steering_messages.clear()
             self._set_status(index, "failed")
             self._append_event(index, "error", str(error))
 
@@ -711,6 +823,12 @@ class CatchyApp(App[None]):
                         f"[{ts}]{timestamp}[/]  [bold {red}]✗[/]  [{red}]{event.text}[/]"
                     )
                 )
+            case "steer":
+                log.write(
+                    Text.from_markup(
+                        f"[{ts}]{timestamp}[/]  [{PALETTE['blue']}]↪  {event.text}[/]"
+                    )
+                )
             case _:
                 log.write(
                     Text.from_markup(
@@ -772,11 +890,17 @@ class CatchyApp(App[None]):
     def _sync_controls(self) -> None:
         run_button = self.query_one("#run-selected", Button)
         pause_button = self.query_one("#pause-selected", Button)
+        steer_input = self.query_one("#steer-input", Input)
+        queue_steer = self.query_one("#queue-steer", Button)
+        steer_status = self.query_one("#steer-queue-status", Static)
         agent_select = cast(Select[str], self.query_one("#agent-select", Select))
 
         if not self._states:
             run_button.disabled = True
             pause_button.disabled = True
+            steer_input.disabled = True
+            queue_steer.disabled = True
+            steer_status.update("")
             agent_select.disabled = False
             if agent_select.value != self._pending_agent_id:
                 agent_select.value = self._pending_agent_id
@@ -795,6 +919,15 @@ class CatchyApp(App[None]):
             "failed",
         }
         pause_button.label = "▶  Resume" if state.status == "paused" else "⏸  Pause"
+        steer_enabled = state.started and state.status not in {
+            "queued",
+            "completed",
+            "failed",
+        }
+        steer_input.disabled = not steer_enabled
+        queue_steer.disabled = not steer_enabled
+        pending_count = len(state.steering_messages)
+        steer_status.update(f"{pending_count} queued" if pending_count else "no queued steer messages")
 
     def _agent_label(self, definition: AgentDefinition) -> str:
         return f"{definition.id} · {definition.model_name}"

@@ -83,7 +83,7 @@ challenges/lets-change/thread-20260510-041230-123456/workspace/
 challenges/lets-change/thread-20260510-041230-123456/metadata/
 ```
 
-The CLI prints the generated thread, workspace, and metadata paths before streaming output. In the TUI, add a challenge root, choose an agent, then select **Start thread**.
+The CLI prints the generated thread, workspace, and metadata paths before streaming output. In the TUI, add a challenge root, choose an agent, then select **Start thread**. While a thread is active, use the steer message box to queue guidance that will be sent to the agent between stream updates.
 
 ## Agent Configuration
 
@@ -128,11 +128,11 @@ catchy/
 
 ## Adding a new agent
 
-The `Agent` protocol is minimal: implement `stream(...)`, add a Pydantic-style `Configuration` model in the same module, and expose `from_configuration(...)` on the agent class.
+The `Agent` protocol is minimal: implement `stream(...)`, add a Pydantic-style `Configuration` model in the same module, and expose `from_configuration(...)` on the agent class. `stream(...)` is an async generator: it yields display text and can receive `str | None` steering messages between yields.
 
 ```python
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncGenerator
 
 from pydantic import BaseModel
 
@@ -157,10 +157,12 @@ class MyAgent(Agent):
         self,
         challenge: Challenge,
         workspace: Path,
-        metadata: Path,
+        metadata_directory: Path,
         webhook: Webhook | None = None,
-    ) -> AsyncIterator[str]:
-        yield "thinking..."
+    ) -> AsyncGenerator[str, str | None]:
+        steering_message = yield "thinking..."
+        if steering_message is not None:
+            ...
         ...
 ```
 

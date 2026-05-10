@@ -6,7 +6,7 @@ import os
 import shlex
 from contextlib import contextmanager
 from pathlib import Path
-from typing import AsyncIterator, Literal
+from typing import AsyncGenerator, Literal
 
 from catchy.core.agents.protocols import Agent
 from catchy.core.challenge.models import Challenge
@@ -173,7 +173,7 @@ class CodexAgent(Agent):
         workspace: Path,
         metadata_directory: Path,
         webhook: Webhook | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncGenerator[str, str | None]:
         if not workspace.exists():
             raise ValueError(f"workspace does not exist: {workspace}")
         if not workspace.is_dir():
@@ -242,7 +242,11 @@ class CodexAgent(Agent):
                             item_message = ""
                         case ItemCompletedNotification():
                             if item_message.strip():
-                                yield item_message
+                                steering_message = yield item_message
+
+                                if steering_message is not None:
+                                    await turn.steer(TextInput(steering_message))
+
                             item_message = ""
                         case ErrorNotification() as payload if (
                             payload.turn_id == turn.id
