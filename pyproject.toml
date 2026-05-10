@@ -14,7 +14,7 @@ catchy-core = { workspace = true }
 catchy-codex = { workspace = true }
 
 [tool.pyright]
-include = ["packages/core", "packages/codex"]
+include = ["packages/core", "packages/codex", "tests"]
 extraPaths = ["packages/core", "packages/codex"]
 venvPath = "."
 venv = ".venv"
@@ -22,11 +22,19 @@ pythonVersion = "3.14"
 useLibraryCodeForTypes = true
 typeCheckingMode = "strict"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "vcr: record and replay external HTTP interactions with pytest-recording",
+]
+
 [dependency-groups]
 dev = [
     "catchy-codex",
     "catchy-core",
     "pyright>=1.1.409",
+    "pytest>=9.0.3",
+    "pytest-recording>=0.13.4",
     "ruff>=0.15.12",
     "textual>=6.5.0",
 ]

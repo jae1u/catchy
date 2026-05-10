@@ -1,0 +1,258 @@
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import json
+import os
+import select
+import shutil
+import socket
+import threading
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any, cast
+
+import pytest
+from docker import DockerClient
+from docker.errors import DockerException
+
+from catchy.codex import CodexAgent
+from catchy.core.challenge.models import Challenge
+
+_CODEX_IMAGE = "ghcr.io/betarixm/catchy-codex:latest"
+_DOCKER_SOCKET = "/var/run/docker.sock"
+_CHALLENGE_ROOT = (
+    Path(__file__).parent / "fixtures" / "challenges" / "lets-change"
+).resolve()
+_STREAM_OUTPUT_PATH = (
+    Path(__file__).parent / "fixtures" / "stream_outputs" / "lets_change_stream.json"
+)
+_STREAM_OK_MARKER = "CATCHY_STREAM_OK"
+
+
+class _DockerSocketProxy:
+    def __init__(self, unix_socket_path: str) -> None:
+        self._unix_socket_path = unix_socket_path
+        self._server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server.bind(("127.0.0.1", 0))
+        self._server.listen()
+        self._stopped = threading.Event()
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+
+    @property
+    def base_url(self) -> str:
+        host, port = self._server.getsockname()
+        return f"tcp://{host}:{port}"
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def close(self) -> None:
+        self._stopped.set()
+        with contextlib.suppress(OSError):
+            with socket.create_connection(self._server.getsockname(), timeout=0.1):
+                pass
+        self._server.close()
+        self._thread.join(timeout=1)
+
+    def _serve(self) -> None:
+        while not self._stopped.is_set():
+            try:
+                client, _address = self._server.accept()
+            except OSError:
+                break
+
+            thread = threading.Thread(target=self._handle, args=(client,), daemon=True)
+            thread.start()
+
+    def _handle(self, client: socket.socket) -> None:
+        with client:
+            upstream = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            with upstream:
+                upstream.connect(self._unix_socket_path)
+                sockets = [client, upstream]
+
+                while True:
+                    readable, _writable, _errors = select.select(sockets, [], [], 5)
+                    if not readable:
+                        return
+
+                    for source in readable:
+                        data = source.recv(65536)
+                        if not data:
+                            return
+                        destination = upstream if source is client else client
+                        destination.sendall(data)
+
+
+@pytest.fixture
+def docker_base_url(pytestconfig: pytest.Config) -> Iterator[str]:
+    record_mode = str(pytestconfig.getoption("--record-mode"))
+    if record_mode == "none":
+        yield "tcp://127.0.0.1:1"
+        return
+
+    proxy = _DockerSocketProxy(_DOCKER_SOCKET)
+    proxy.start()
+    try:
+        yield proxy.base_url
+    finally:
+        proxy.close()
+
+
+@pytest.fixture
+def run_directories() -> Iterator[tuple[Path, Path]]:
+    root = Path("/tmp/catchy-pytest/lets-change")
+    shutil.rmtree(root, ignore_errors=True)
+    workspace = root / "workspace"
+    metadata = root / "metadata"
+    workspace.mkdir(parents=True)
+    metadata.mkdir(parents=True)
+
+    try:
+        yield workspace, metadata
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _lets_change_challenge() -> Challenge:
+    return Challenge(
+        id="lets-change",
+        description="nc sol.plus.or.kr 25001",
+        directory=_CHALLENGE_ROOT / "source",
+    )
+
+
+def _redact_stream_message(message: str) -> str:
+    redacted = message
+    for name, value in os.environ.items():
+        if not value or len(value) < 8:
+            continue
+        if any(marker in name.upper() for marker in ("API_KEY", "AUTH", "SECRET")):
+            redacted = redacted.replace(value, "<REDACTED>")
+    return redacted
+
+
+def _record_stream_output(messages: list[str]) -> None:
+    _STREAM_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "challenge_id": "lets-change",
+        "expected_marker": _STREAM_OK_MARKER,
+        "messages": [_redact_stream_message(message) for message in messages],
+    }
+    _STREAM_OUTPUT_PATH.write_text(json.dumps(payload, indent=2) + "\n")
+
+
+@pytest.mark.default_cassette("lets_change_docker_container.yaml")
+@pytest.mark.vcr(match_on=["method", "path", "query"])
+def test_codex_agent_runs_lets_change_in_recorded_docker_container(
+    docker_base_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    run_directories: tuple[Path, Path],
+) -> None:
+    monkeypatch.setenv("CATCHY_TEST_OPENAI_API_KEY", "test-openai-api-key")
+    workspace, metadata_directory = run_directories
+    docker_client = DockerClient(base_url=docker_base_url, timeout=30)
+
+    try:
+        agent = CodexAgent(
+            id="codex-test",
+            model_name="gpt-test",
+            model_api_key=os.environ["CATCHY_TEST_OPENAI_API_KEY"],
+            container_challenge_directory="/challenge",
+            container_workspace_directory="/workspace",
+            container_metadata_directory="/metadata",
+            docker_image=docker_client.images.get(_CODEX_IMAGE),
+            docker_client=docker_client,
+            user_prompt_template="Solve {{ challenge.id }}",
+        )
+        challenge = _lets_change_challenge()
+
+        with agent._docker_container(  # pyright: ignore[reportPrivateUsage]
+            challenge=challenge,
+            workspace=workspace,
+            metadata_directory=metadata_directory,
+        ) as container:
+            mounts = cast(list[dict[str, Any]], container.attrs["Mounts"])
+            destinations = {str(mount["Destination"]) for mount in mounts}
+
+        assert "/challenge" in destinations
+        assert "/workspace" in destinations
+        assert "/metadata" in destinations
+        assert (_CHALLENGE_ROOT / "source" / "challenge.c").is_file()
+        assert (metadata_directory / ".codex" / "auth.json").exists()
+    finally:
+        docker_client.close()
+
+
+def test_codex_agent_stream_reaches_openai_when_enabled(
+    pytestconfig: pytest.Config,
+    run_directories: tuple[Path, Path],
+) -> None:
+    record_mode = str(pytestconfig.getoption("--record-mode"))
+    if record_mode == "none":
+        pytest.skip("pass --record-mode=once to refresh stream output")
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        pytest.skip("OPENAI_API_KEY is required for the live OpenAI stream test")
+
+    async def run_stream() -> list[str]:
+        workspace, metadata_directory = run_directories
+        docker_client = DockerClient(base_url=f"unix://{_DOCKER_SOCKET}", timeout=30)
+        try:
+            try:
+                docker_image = docker_client.images.get(_CODEX_IMAGE)
+            except DockerException as exc:
+                pytest.skip(f"Docker image is not available locally: {exc}")
+
+            agent = CodexAgent(
+                id="codex-live-openai-test",
+                model_name=os.environ.get("CATCHY_TEST_OPENAI_MODEL", "gpt-5.5"),
+                model_api_key=api_key,
+                container_challenge_directory="/challenge",
+                container_workspace_directory="/workspace",
+                container_metadata_directory="/metadata",
+                docker_image=docker_image,
+                docker_client=docker_client,
+                user_prompt_template=(
+                    f"Reply with exactly {_STREAM_OK_MARKER}. "
+                    "Do not run commands or edit files."
+                ),
+            )
+
+            messages: list[str] = []
+            stream = agent.stream(
+                challenge=_lets_change_challenge(),
+                workspace=workspace,
+                metadata_directory=metadata_directory,
+            )
+            async for message in stream:
+                messages.append(message)
+            return messages
+        finally:
+            docker_client.close()
+
+    messages = asyncio.run(asyncio.wait_for(run_stream(), timeout=180))
+
+    assert any(_STREAM_OK_MARKER in message for message in messages)
+    _record_stream_output(messages)
+
+
+def test_recorded_stream_output_has_expected_shape() -> None:
+    if not _STREAM_OUTPUT_PATH.exists():
+        pytest.skip("stream output fixture has not been recorded yet")
+
+    raw_payload = json.loads(_STREAM_OUTPUT_PATH.read_text())
+    assert isinstance(raw_payload, dict)
+    payload = cast(dict[str, Any], raw_payload)
+    assert payload["challenge_id"] == "lets-change"
+    assert payload["expected_marker"] == _STREAM_OK_MARKER
+    raw_messages = payload["messages"]
+    assert isinstance(raw_messages, list)
+    messages = cast(list[Any], raw_messages)
+    assert any(
+        isinstance(message, str) and _STREAM_OK_MARKER in message
+        for message in messages
+    )

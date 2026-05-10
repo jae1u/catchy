@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import shlex
 from contextlib import contextmanager
 from pathlib import Path
 from typing import AsyncGenerator, Literal
@@ -32,7 +30,7 @@ from codex_app_server.generated.v2_all import (
     TurnStatus,
 )
 from docker import DockerClient
-from docker.errors import ContainerError, DockerException
+from docker.errors import DockerException
 from docker.models.images import Image
 from jinja2 import Template
 from omegaconf import OmegaConf
@@ -153,15 +151,20 @@ class CodexAgent(Agent):
 
         image_name = docker_image.tags[0] if docker_image.tags else docker_image.id
         try:
-            self._docker_client.containers.run(
+            container = self._docker_client.containers.run(
                 self._docker_image,
                 command=["sh", "-c", "command -v codex >/dev/null 2>&1"],
+                detach=True,
                 remove=True,
             )
-        except ContainerError as error:
-            raise RuntimeError(
-                f"Codex executable was not found in Docker image {image_name}"
-            ) from error
+            result = container.wait()
+            exit_code = result.get("StatusCode", 1)
+            if exit_code != 0:
+                logs = container.logs().decode()
+                raise RuntimeError(
+                    f"Codex executable was not found in Docker image {image_name}: "
+                    f"{logs}"
+                )
         except DockerException as error:
             raise RuntimeError(
                 f"Failed to check Codex executable in Docker image {image_name}: {error}"
@@ -335,6 +338,13 @@ class CodexAgent(Agent):
         assert metadata_directory.is_dir()
 
         codex_home = f"{self._container_metadata_directory}/.codex"
+        host_codex_home = metadata_directory / ".codex"
+        host_codex_home.mkdir(parents=True, exist_ok=True)
+        (host_codex_home / "auth.json").write_text(
+            json.dumps(
+                {"auth_mode": "apikey", "OPENAI_API_KEY": self._model_api_key}
+            ),
+        )
 
         container = self._docker_client.containers.run(
             self._docker_image,
@@ -379,24 +389,6 @@ class CodexAgent(Agent):
                 f"({self._id}) Chrome DevTools Protocol available after running "
                 f"`chrome-devtools`: {chrome_devtools_url}"
             )
-
-        result = container.exec_run(
-            cmd=[
-                "sh",
-                "-c",
-                " && ".join(
-                    [
-                        f"mkdir -p {shlex.quote(codex_home)}",
-                        f"printf %s {shlex.quote(json.dumps({'auth_mode': 'apikey', 'OPENAI_API_KEY': self._model_api_key}))} > {shlex.quote(f'{codex_home}/auth.json')}",
-                        f"chown -R {os.getuid()}:{os.getgid()} {shlex.quote(self._container_workspace_directory)} {shlex.quote(self._container_metadata_directory)}",
-                    ]
-                ),
-            ]
-        )
-        if result.exit_code != 0:
-            logs = container.logs().decode()
-            container.remove(force=True)
-            raise RuntimeError(f"Failed to set up container auth file: {logs}")
 
         try:
             yield container

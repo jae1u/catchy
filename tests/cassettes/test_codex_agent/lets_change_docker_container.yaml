@@ -1,0 +1,434 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: GET
+    uri: http://127.0.0.1:34049/version
+  response:
+    body:
+      string: '{"Platform":{"Name":"Docker Engine - Community"},"Version":"29.2.1","ApiVersion":"1.53","MinAPIVersion":"1.44","Os":"linux","Arch":"amd64","Components":[{"Name":"Engine","Version":"29.2.1","Details":{"ApiVersion":"1.53","Arch":"amd64","BuildTime":"2026-02-02T17:17:26.000000000+00:00","Experimental":"false","GitCommit":"6bc6209","GoVersion":"go1.25.6","KernelVersion":"6.8.0-101-generic","MinAPIVersion":"1.44","Os":"linux"}},{"Name":"containerd","Version":"v2.2.1","Details":{"GitCommit":"dea7da592f5d1d2b7755e3a161be07f43fad8f75"}},{"Name":"runc","Version":"1.3.4","Details":{"GitCommit":"v1.3.4-0-gd6d73eb8"}},{"Name":"docker-init","Version":"0.19.0","Details":{"GitCommit":"de40ad0"}}],"GitCommit":"6bc6209","GoVersion":"go1.25.6","KernelVersion":"6.8.0-101-generic","BuildTime":"2026-02-02T17:17:26.000000000+00:00"}
+
+        '
+    headers:
+      Api-Version:
+      - '1.53'
+      Content-Length:
+      - '823'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 10 May 2026 05:14:02 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: GET
+    uri: http://127.0.0.1:34049/v1.53/images/ghcr.io/betarixm/catchy-codex:latest/json
+  response:
+    body:
+      string: '{"Id":"sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb","RepoTags":["ghcr.io/betarixm/catchy-codex:latest"],"RepoDigests":["ghcr.io/betarixm/catchy-codex@sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb"],"Comment":"buildkit.dockerfile.v0","Created":"2026-05-10T04:30:49.82856441Z","Config":{"Env":["PATH=/opt/ctf-venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","DEBIAN_FRONTEND=noninteractive","CODEX_HOME=/metadata/.codex"],"Cmd":["/bin/bash"],"WorkingDir":"/workspace","Labels":{"org.opencontainers.image.created":"2026-04-21T17:23:54.324551+00:00","org.opencontainers.image.description":"The
+        Ubuntu container image maintained by Canonical\n\nUbuntu is a Debian-based
+        Linux operating system that runs from the desktop to the cloud, to all your
+        internet connected things.\nIt is the world''s most popular operating system
+        across public clouds and OpenStack clouds.\nIt is the number one platform
+        for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers
+        at scale.\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\n","org.opencontainers.image.title":"ubuntu","org.opencontainers.image.version":"26.04"}},"Architecture":"amd64","Os":"linux","Size":1988716496,"RootFS":{"Type":"layers","Layers":["sha256:0c3db79307ab91dad11fad2b136a2b56df6efeeb567c4c99e6e316b63885c9f6","sha256:f421a7e99ead34566fcb11403f6f38675b53035f39937394893eaf7d87c39f83","sha256:df2e2602b5889454a2a7a5637a6fa857a1bac510affa6a27c24854b135beece0","sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef","sha256:2936931529c45e906ea8c436a4bd1251a63196bfe7c4d22cd1e36678cd0048b5","sha256:a7c16b800b7dbe241fcd2d052fb8bf88f2faa1a5678168be38c1b9e33e18fa90","sha256:1f97cc3ec3234273434942a40e05ce7e02be12c2ee06e37f4fccb28bec212d33","sha256:9724388232b26243e971aac62ba1ed07bef51d5c43ab36ff0c08908e6ff29b5b","sha256:2ba635caf8b626c645afa456eea12d21910c64c5dd8a85ee7e543f4c6bc65b78","sha256:feccfda141654a2cfb8d062d87dbdcedbe6e4585a42c661fd69eca46f45f91e1","sha256:f66aadd37d18758dd90f1a82ecf24afa523368fcb68ceb3c82328ae11d98b750","sha256:f87c1a6216048e97dfe72715947161c9001c25d3ed7a29b2d13592eb111d9611","sha256:b1d1cdaadfd551083947de4621ee17cc5bffa119abc1bbb03114f9045083c217","sha256:e254cf65a9c93dfd713b2abd0e371f2c2105183e15c60af95cde918849f03ee0","sha256:b751b2612f03a48afb2db3bd395cf32031c0d7f68b46af747bdf64da03de8472","sha256:290d8c0be7cf0a19fc30bfc39de5322f6e9a0eadd7387753b11ccf06aaf050cb","sha256:f44e4dac5142dc6356849a4dde8cb410b57cc860ffbfe49598624ee5eae3a935","sha256:f04c41785dfe55b6f9573c7ecba73d577188a958b8bda89018cea59f28324f0b","sha256:c17f3d382ca59889f1d7736cdb150e9b1c28fe427824b70b821da73297a5722e","sha256:e7957d5878f4ceb5d8062780dae1c3bd4bf20fb18448153137ef836d82c6b8ca"]},"Metadata":{"LastTagTime":"2026-05-10T04:35:52.522979893Z"},"Descriptor":{"mediaType":"application/vnd.oci.image.index.v1+json","digest":"sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb","size":856},"Identity":{"Pull":[{"Repository":"ghcr.io/betarixm/catchy-codex"}]}}
+
+        '
+    headers:
+      Api-Version:
+      - '1.53'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 10 May 2026 05:14:02 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+      Transfer-Encoding:
+      - chunked
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"Tty": false, "OpenStdin": false, "StdinOnce": false, "AttachStdin": false,
+      "AttachStdout": false, "AttachStderr": false, "Cmd": ["sh", "-c", "command -v
+      codex >/dev/null 2>&1"], "Image": "sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb",
+      "NetworkDisabled": false, "HostConfig": {"NetworkMode": "default", "AutoRemove":
+      true}}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '351'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: POST
+    uri: http://127.0.0.1:34049/v1.53/containers/create
+  response:
+    body:
+      string: '{"Id":"2956a89bf0acf9497fd6aa1a55c808a66d8b66a6cb52401a98abecc00e72a393","Warnings":[]}
+
+        '
+    headers:
+      Api-Version:
+      - '1.53'
+      Content-Length:
+      - '88'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 10 May 2026 05:14:02 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+    status:
+      code: 201
+      message: Created
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: GET
+    uri: http://127.0.0.1:34049/v1.53/containers/2956a89bf0acf9497fd6aa1a55c808a66d8b66a6cb52401a98abecc00e72a393/json
+  response:
+    body:
+      string: '{"Id":"2956a89bf0acf9497fd6aa1a55c808a66d8b66a6cb52401a98abecc00e72a393","Created":"2026-05-10T05:14:02.513802878Z","Path":"sh","Args":["-c","command
+        -v codex >/dev/null 2>&1"],"State":{"Status":"created","Running":false,"Paused":false,"Restarting":false,"OOMKilled":false,"Dead":false,"Pid":0,"ExitCode":0,"Error":"","StartedAt":"0001-01-01T00:00:00Z","FinishedAt":"0001-01-01T00:00:00Z"},"Image":"sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb","ResolvConfPath":"","HostnamePath":"","HostsPath":"","LogPath":"","Name":"/elastic_sanderson","RestartCount":0,"Driver":"overlayfs","Platform":"linux","MountLabel":"","ProcessLabel":"","AppArmorProfile":"","ExecIDs":null,"HostConfig":{"Binds":null,"ContainerIDFile":"","LogConfig":{"Type":"json-file","Config":{}},"NetworkMode":"bridge","PortBindings":{},"RestartPolicy":{"Name":"no","MaximumRetryCount":0},"AutoRemove":true,"VolumeDriver":"","VolumesFrom":null,"ConsoleSize":[0,0],"CapAdd":null,"CapDrop":null,"CgroupnsMode":"private","Dns":null,"DnsOptions":null,"DnsSearch":null,"ExtraHosts":null,"GroupAdd":null,"IpcMode":"private","Cgroup":"","Links":null,"OomScoreAdj":0,"PidMode":"","Privileged":false,"PublishAllPorts":false,"ReadonlyRootfs":false,"SecurityOpt":null,"UTSMode":"","UsernsMode":"","ShmSize":67108864,"Runtime":"runc","Isolation":"","CpuShares":0,"Memory":0,"NanoCpus":0,"CgroupParent":"","BlkioWeight":0,"BlkioWeightDevice":null,"BlkioDeviceReadBps":null,"BlkioDeviceWriteBps":null,"BlkioDeviceReadIOps":null,"BlkioDeviceWriteIOps":null,"CpuPeriod":0,"CpuQuota":0,"CpuRealtimePeriod":0,"CpuRealtimeRuntime":0,"CpusetCpus":"","CpusetMems":"","Devices":null,"DeviceCgroupRules":null,"DeviceRequests":null,"MemoryReservation":0,"MemorySwap":0,"MemorySwappiness":null,"OomKillDisable":false,"PidsLimit":null,"Ulimits":null,"CpuCount":0,"CpuPercent":0,"IOMaximumIOps":0,"IOMaximumBandwidth":0,"MaskedPaths":["/proc/acpi","/proc/asound","/proc/interrupts","/proc/kcore","/proc/keys","/proc/latency_stats","/proc/sched_debug","/proc/scsi","/proc/timer_list","/proc/timer_stats","/sys/devices/virtual/powercap","/sys/firmware"],"ReadonlyPaths":["/proc/bus","/proc/fs","/proc/irq","/proc/sys","/proc/sysrq-trigger"]},"Storage":{"RootFS":{"Snapshot":{"Name":"overlayfs"}}},"Mounts":[],"Config":{"Hostname":"2956a89bf0ac","Domainname":"","User":"","AttachStdin":false,"AttachStdout":false,"AttachStderr":false,"Tty":false,"OpenStdin":false,"StdinOnce":false,"Env":["PATH=/opt/ctf-venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","DEBIAN_FRONTEND=noninteractive","CODEX_HOME=/metadata/.codex"],"Cmd":["sh","-c","command
+        -v codex >/dev/null 2>&1"],"Image":"sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb","Volumes":null,"WorkingDir":"/workspace","Entrypoint":null,"Labels":{"org.opencontainers.image.created":"2026-04-21T17:23:54.324551+00:00","org.opencontainers.image.description":"The
+        Ubuntu container image maintained by Canonical\n\nUbuntu is a Debian-based
+        Linux operating system that runs from the desktop to the cloud, to all your
+        internet connected things.\nIt is the world''s most popular operating system
+        across public clouds and OpenStack clouds.\nIt is the number one platform
+        for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers
+        at scale.\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\n","org.opencontainers.image.title":"ubuntu","org.opencontainers.image.version":"26.04"}},"NetworkSettings":{"SandboxID":"","SandboxKey":"","Ports":{},"Networks":{"bridge":{"IPAMConfig":null,"Links":null,"Aliases":null,"DriverOpts":null,"GwPriority":0,"NetworkID":"","EndpointID":"","Gateway":"","IPAddress":"","MacAddress":"","IPPrefixLen":0,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":null}}},"ImageManifestDescriptor":{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:498783fe57b9b7541da627478339c270ba160369f0de381b0673e6c3af7dc31b","size":4117,"platform":{"architecture":"amd64","os":"linux"}}}
+
+        '
+    headers:
+      Api-Version:
+      - '1.53'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 10 May 2026 05:14:02 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+      Transfer-Encoding:
+      - chunked
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '0'
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: POST
+    uri: http://127.0.0.1:34049/v1.53/containers/2956a89bf0acf9497fd6aa1a55c808a66d8b66a6cb52401a98abecc00e72a393/start
+  response:
+    body:
+      string: ''
+    headers:
+      Api-Version:
+      - '1.53'
+      Date:
+      - Sun, 10 May 2026 05:14:02 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+    status:
+      code: 204
+      message: No Content
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '0'
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: POST
+    uri: http://127.0.0.1:34049/v1.53/containers/2956a89bf0acf9497fd6aa1a55c808a66d8b66a6cb52401a98abecc00e72a393/wait
+  response:
+    body:
+      string: '{"StatusCode":0}
+
+        '
+    headers:
+      Api-Version:
+      - '1.53'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 10 May 2026 05:14:02 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+      Transfer-Encoding:
+      - chunked
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"ExposedPorts": {"9222/tcp": {}}, "Tty": false, "OpenStdin": true, "StdinOnce":
+      false, "AttachStdin": false, "AttachStdout": false, "AttachStderr": false, "Env":
+      ["HOME=/workspace", "CODEX_HOME=/metadata/.codex", "CHROME_REMOTE_DEBUGGING_PORT=9222"],
+      "Image": "sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb",
+      "Volumes": {"/challenge": {}, "/workspace": {}, "/metadata": {}}, "NetworkDisabled":
+      false, "HostConfig": {"NetworkMode": "default", "CapAdd": ["SYS_ADMIN"], "SecurityOpt":
+      ["seccomp=unconfined", "apparmor=unconfined"], "Binds": ["/home/beta/catchy/tests/fixtures/challenges/lets-change/source:/challenge:ro",
+      "/tmp/catchy-pytest/lets-change/workspace:/workspace:rw", "/tmp/catchy-pytest/lets-change/metadata:/metadata:rw"],
+      "PortBindings": {"9222/tcp": [{"HostIp": "", "HostPort": ""}]}}}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '825'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: POST
+    uri: http://127.0.0.1:34049/v1.53/containers/create
+  response:
+    body:
+      string: '{"Id":"c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb","Warnings":[]}
+
+        '
+    headers:
+      Api-Version:
+      - '1.53'
+      Content-Length:
+      - '88'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 10 May 2026 05:14:03 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+    status:
+      code: 201
+      message: Created
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: GET
+    uri: http://127.0.0.1:34049/v1.53/containers/c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb/json
+  response:
+    body:
+      string: '{"Id":"c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb","Created":"2026-05-10T05:14:02.909031342Z","Path":"/bin/bash","Args":[],"State":{"Status":"created","Running":false,"Paused":false,"Restarting":false,"OOMKilled":false,"Dead":false,"Pid":0,"ExitCode":0,"Error":"","StartedAt":"0001-01-01T00:00:00Z","FinishedAt":"0001-01-01T00:00:00Z"},"Image":"sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb","ResolvConfPath":"","HostnamePath":"","HostsPath":"","LogPath":"","Name":"/cranky_wu","RestartCount":0,"Driver":"overlayfs","Platform":"linux","MountLabel":"","ProcessLabel":"","AppArmorProfile":"unconfined","ExecIDs":null,"HostConfig":{"Binds":["/home/beta/catchy/tests/fixtures/challenges/lets-change/source:/challenge:ro","/tmp/catchy-pytest/lets-change/workspace:/workspace:rw","/tmp/catchy-pytest/lets-change/metadata:/metadata:rw"],"ContainerIDFile":"","LogConfig":{"Type":"json-file","Config":{}},"NetworkMode":"bridge","PortBindings":{"9222/tcp":[{"HostIp":"","HostPort":""}]},"RestartPolicy":{"Name":"no","MaximumRetryCount":0},"AutoRemove":false,"VolumeDriver":"","VolumesFrom":null,"ConsoleSize":[0,0],"CapAdd":["SYS_ADMIN"],"CapDrop":null,"CgroupnsMode":"private","Dns":null,"DnsOptions":null,"DnsSearch":null,"ExtraHosts":null,"GroupAdd":null,"IpcMode":"private","Cgroup":"","Links":null,"OomScoreAdj":0,"PidMode":"","Privileged":false,"PublishAllPorts":false,"ReadonlyRootfs":false,"SecurityOpt":["seccomp=unconfined","apparmor=unconfined"],"UTSMode":"","UsernsMode":"","ShmSize":67108864,"Runtime":"runc","Isolation":"","CpuShares":0,"Memory":0,"NanoCpus":0,"CgroupParent":"","BlkioWeight":0,"BlkioWeightDevice":null,"BlkioDeviceReadBps":null,"BlkioDeviceWriteBps":null,"BlkioDeviceReadIOps":null,"BlkioDeviceWriteIOps":null,"CpuPeriod":0,"CpuQuota":0,"CpuRealtimePeriod":0,"CpuRealtimeRuntime":0,"CpusetCpus":"","CpusetMems":"","Devices":null,"DeviceCgroupRules":null,"DeviceRequests":null,"MemoryReservation":0,"MemorySwap":0,"MemorySwappiness":null,"OomKillDisable":false,"PidsLimit":null,"Ulimits":null,"CpuCount":0,"CpuPercent":0,"IOMaximumIOps":0,"IOMaximumBandwidth":0,"MaskedPaths":["/proc/acpi","/proc/asound","/proc/interrupts","/proc/kcore","/proc/keys","/proc/latency_stats","/proc/sched_debug","/proc/scsi","/proc/timer_list","/proc/timer_stats","/sys/devices/virtual/powercap","/sys/firmware"],"ReadonlyPaths":["/proc/bus","/proc/fs","/proc/irq","/proc/sys","/proc/sysrq-trigger"]},"Storage":{"RootFS":{"Snapshot":{"Name":"overlayfs"}}},"Mounts":[{"Type":"bind","Source":"/tmp/catchy-pytest/lets-change/metadata","Destination":"/metadata","Mode":"rw","RW":true,"Propagation":"rprivate"},{"Type":"bind","Source":"/home/beta/catchy/tests/fixtures/challenges/lets-change/source","Destination":"/challenge","Mode":"ro","RW":false,"Propagation":"rprivate"},{"Type":"bind","Source":"/tmp/catchy-pytest/lets-change/workspace","Destination":"/workspace","Mode":"rw","RW":true,"Propagation":"rprivate"}],"Config":{"Hostname":"c2d2636e5a38","Domainname":"","User":"","AttachStdin":false,"AttachStdout":false,"AttachStderr":false,"ExposedPorts":{"9222/tcp":{}},"Tty":false,"OpenStdin":true,"StdinOnce":false,"Env":["HOME=/workspace","CODEX_HOME=/metadata/.codex","CHROME_REMOTE_DEBUGGING_PORT=9222","PATH=/opt/ctf-venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","DEBIAN_FRONTEND=noninteractive"],"Cmd":["/bin/bash"],"Image":"sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb","Volumes":{"/challenge":{},"/metadata":{},"/workspace":{}},"WorkingDir":"/workspace","Entrypoint":null,"Labels":{"org.opencontainers.image.created":"2026-04-21T17:23:54.324551+00:00","org.opencontainers.image.description":"The
+        Ubuntu container image maintained by Canonical\n\nUbuntu is a Debian-based
+        Linux operating system that runs from the desktop to the cloud, to all your
+        internet connected things.\nIt is the world''s most popular operating system
+        across public clouds and OpenStack clouds.\nIt is the number one platform
+        for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers
+        at scale.\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\n","org.opencontainers.image.title":"ubuntu","org.opencontainers.image.version":"26.04"}},"NetworkSettings":{"SandboxID":"","SandboxKey":"","Ports":{},"Networks":{"bridge":{"IPAMConfig":null,"Links":null,"Aliases":null,"DriverOpts":null,"GwPriority":0,"NetworkID":"","EndpointID":"","Gateway":"","IPAddress":"","MacAddress":"","IPPrefixLen":0,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":null}}},"ImageManifestDescriptor":{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:498783fe57b9b7541da627478339c270ba160369f0de381b0673e6c3af7dc31b","size":4117,"platform":{"architecture":"amd64","os":"linux"}}}
+
+        '
+    headers:
+      Api-Version:
+      - '1.53'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 10 May 2026 05:14:03 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+      Transfer-Encoding:
+      - chunked
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '0'
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: POST
+    uri: http://127.0.0.1:34049/v1.53/containers/c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb/start
+  response:
+    body:
+      string: ''
+    headers:
+      Api-Version:
+      - '1.53'
+      Date:
+      - Sun, 10 May 2026 05:14:03 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+    status:
+      code: 204
+      message: No Content
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: GET
+    uri: http://127.0.0.1:34049/v1.53/containers/c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb/json
+  response:
+    body:
+      string: '{"Id":"c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb","Created":"2026-05-10T05:14:02.909031342Z","Path":"/bin/bash","Args":[],"State":{"Status":"running","Running":true,"Paused":false,"Restarting":false,"OOMKilled":false,"Dead":false,"Pid":1247512,"ExitCode":0,"Error":"","StartedAt":"2026-05-10T05:14:03.130254799Z","FinishedAt":"0001-01-01T00:00:00Z"},"Image":"sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb","ResolvConfPath":"/var/lib/docker/containers/c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb/resolv.conf","HostnamePath":"/var/lib/docker/containers/c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb/hostname","HostsPath":"/var/lib/docker/containers/c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb/hosts","LogPath":"/var/lib/docker/containers/c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb/c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb-json.log","Name":"/cranky_wu","RestartCount":0,"Driver":"overlayfs","Platform":"linux","MountLabel":"","ProcessLabel":"","AppArmorProfile":"unconfined","ExecIDs":null,"HostConfig":{"Binds":["/home/beta/catchy/tests/fixtures/challenges/lets-change/source:/challenge:ro","/tmp/catchy-pytest/lets-change/workspace:/workspace:rw","/tmp/catchy-pytest/lets-change/metadata:/metadata:rw"],"ContainerIDFile":"","LogConfig":{"Type":"json-file","Config":{}},"NetworkMode":"bridge","PortBindings":{"9222/tcp":[{"HostIp":"","HostPort":""}]},"RestartPolicy":{"Name":"no","MaximumRetryCount":0},"AutoRemove":false,"VolumeDriver":"","VolumesFrom":null,"ConsoleSize":[0,0],"CapAdd":["SYS_ADMIN"],"CapDrop":null,"CgroupnsMode":"private","Dns":null,"DnsOptions":null,"DnsSearch":null,"ExtraHosts":null,"GroupAdd":null,"IpcMode":"private","Cgroup":"","Links":null,"OomScoreAdj":0,"PidMode":"","Privileged":false,"PublishAllPorts":false,"ReadonlyRootfs":false,"SecurityOpt":["seccomp=unconfined","apparmor=unconfined"],"UTSMode":"","UsernsMode":"","ShmSize":67108864,"Runtime":"runc","Isolation":"","CpuShares":0,"Memory":0,"NanoCpus":0,"CgroupParent":"","BlkioWeight":0,"BlkioWeightDevice":null,"BlkioDeviceReadBps":null,"BlkioDeviceWriteBps":null,"BlkioDeviceReadIOps":null,"BlkioDeviceWriteIOps":null,"CpuPeriod":0,"CpuQuota":0,"CpuRealtimePeriod":0,"CpuRealtimeRuntime":0,"CpusetCpus":"","CpusetMems":"","Devices":null,"DeviceCgroupRules":null,"DeviceRequests":null,"MemoryReservation":0,"MemorySwap":0,"MemorySwappiness":null,"OomKillDisable":null,"PidsLimit":null,"Ulimits":null,"CpuCount":0,"CpuPercent":0,"IOMaximumIOps":0,"IOMaximumBandwidth":0,"MaskedPaths":["/proc/acpi","/proc/asound","/proc/interrupts","/proc/kcore","/proc/keys","/proc/latency_stats","/proc/sched_debug","/proc/scsi","/proc/timer_list","/proc/timer_stats","/sys/devices/virtual/powercap","/sys/firmware"],"ReadonlyPaths":["/proc/bus","/proc/fs","/proc/irq","/proc/sys","/proc/sysrq-trigger"]},"Storage":{"RootFS":{"Snapshot":{"Name":"overlayfs"}}},"Mounts":[{"Type":"bind","Source":"/tmp/catchy-pytest/lets-change/workspace","Destination":"/workspace","Mode":"rw","RW":true,"Propagation":"rprivate"},{"Type":"bind","Source":"/tmp/catchy-pytest/lets-change/metadata","Destination":"/metadata","Mode":"rw","RW":true,"Propagation":"rprivate"},{"Type":"bind","Source":"/home/beta/catchy/tests/fixtures/challenges/lets-change/source","Destination":"/challenge","Mode":"ro","RW":false,"Propagation":"rprivate"}],"Config":{"Hostname":"c2d2636e5a38","Domainname":"","User":"","AttachStdin":false,"AttachStdout":false,"AttachStderr":false,"ExposedPorts":{"9222/tcp":{}},"Tty":false,"OpenStdin":true,"StdinOnce":false,"Env":["HOME=/workspace","CODEX_HOME=/metadata/.codex","CHROME_REMOTE_DEBUGGING_PORT=9222","PATH=/opt/ctf-venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","DEBIAN_FRONTEND=noninteractive"],"Cmd":["/bin/bash"],"Image":"sha256:29d5fb3ee9876e441896831ac03d3346fda6863481fa6965c4565613c5d538fb","Volumes":{"/challenge":{},"/metadata":{},"/workspace":{}},"WorkingDir":"/workspace","Entrypoint":null,"Labels":{"org.opencontainers.image.created":"2026-04-21T17:23:54.324551+00:00","org.opencontainers.image.description":"The
+        Ubuntu container image maintained by Canonical\n\nUbuntu is a Debian-based
+        Linux operating system that runs from the desktop to the cloud, to all your
+        internet connected things.\nIt is the world''s most popular operating system
+        across public clouds and OpenStack clouds.\nIt is the number one platform
+        for containers; from Docker to Kubernetes to LXD, Ubuntu can run your containers
+        at scale.\nFast, secure and simple, Ubuntu powers millions of PCs worldwide.\n","org.opencontainers.image.title":"ubuntu","org.opencontainers.image.version":"26.04"}},"NetworkSettings":{"SandboxID":"e963a6e0bab1451a7f0416c115af21f09279ec6e77da64f0e63b98431a3f7899","SandboxKey":"/var/run/docker/netns/e963a6e0bab1","Ports":{"9222/tcp":[{"HostIp":"0.0.0.0","HostPort":"32781"},{"HostIp":"::","HostPort":"32781"}]},"Networks":{"bridge":{"IPAMConfig":null,"Links":null,"Aliases":null,"DriverOpts":null,"GwPriority":0,"NetworkID":"d7789487c5570e639c49dd47d4f45670d36fb85fe2459dfe1c84f0dae3ff07c7","EndpointID":"39d50c1ba9cf200b5e4488163029a2de9d30e10dbe3e74249090cb5bd631a6a6","Gateway":"172.18.0.1","IPAddress":"172.18.0.5","MacAddress":"0e:1a:fc:46:c4:c7","IPPrefixLen":24,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":null}}},"ImageManifestDescriptor":{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:498783fe57b9b7541da627478339c270ba160369f0de381b0673e6c3af7dc31b","size":4117,"platform":{"architecture":"amd64","os":"linux"}}}
+
+        '
+    headers:
+      Api-Version:
+      - '1.53'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 10 May 2026 05:14:03 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+      Transfer-Encoding:
+      - chunked
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '0'
+      User-Agent:
+      - docker-sdk-python/7.1.0
+    method: DELETE
+    uri: http://127.0.0.1:34049/v1.53/containers/c2d2636e5a385e03fd3a9815fbefbf44bb3bf2d78ca050a18672e089776f98bb?force=True&link=False&v=False
+  response:
+    body:
+      string: ''
+    headers:
+      Api-Version:
+      - '1.53'
+      Date:
+      - Sun, 10 May 2026 05:14:03 GMT
+      Docker-Experimental:
+      - 'false'
+      Ostype:
+      - linux
+      Server:
+      - Docker/29.2.1 (linux)
+    status:
+      code: 204
+      message: No Content
+version: 1

@@ -1,0 +1,7 @@
+{
+  "challenge_id": "lets-change",
+  "expected_marker": "CATCHY_STREAM_OK",
+  "messages": [
+    "CATCHY_STREAM_OK"
+  ]
+}
