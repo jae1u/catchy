@@ -6,7 +6,7 @@
 
 Autonomous AI agent that plays capture-the-flag challenges.
 
-<sub>[TUI App](./scripts/app.py) &nbsp;·&nbsp; [SDK](./scripts/run.py)</sub>
+<sub>[TUI App](./scripts/app.py) &nbsp;·&nbsp; [CLI Runner](./scripts/run.py)</sub>
 
 <br/>
 <br/>
@@ -17,7 +17,7 @@ Autonomous AI agent that plays capture-the-flag challenges.
 
 ## What is this
 
-Catchy plugs a agent into a CTF challenge, runs it inside a sandboxed workspace, and streams every reasoning step, command, and file change to your terminal. Multiple challenges run side-by-side — each stream gets its own workspace, agent model, and event log.
+Catchy plugs an agent into a CTF challenge, runs it inside a sandboxed workspace, and streams every reasoning step, command, and file change to your terminal. Multiple challenges can run side-by-side in the TUI, and each stream gets its own workspace, agent model, and event log.
 
 ## Quick start
 
@@ -46,26 +46,49 @@ For a one-shot, single-challenge run without the UI:
 uv run scripts/run.py challenges/lets-change
 ```
 
+Use a specific agent configuration:
+
+```bash
+uv run scripts/run.py challenges/lets-change --agent-configuration configurations/codex.yaml
+uv run scripts/app.py --configurations-dir configurations
+```
+
 ## Anatomy of a challenge
 
-A challenge is any directory with a `challenge.toml` and a `source/` folder:
+Challenges are directories with a `challenge.yaml` file and a `source/` folder. The YAML is loaded with OmegaConf, so environment interpolation and other OmegaConf features are available where useful.
 
 ```text
 challenges/lets-change/
-├── challenge.toml      # id, description, optional webhook
+├── challenge.yaml      # id, description, optional webhook
 ├── source/             # files mounted into the agent's container
 └── workspace/          # writable scratchpad, created on first run
 ```
 
-```toml
-# challenge.toml
-id = "lets-change"
-description = "..."
+```yaml
+# challenge.yaml
+id: lets-change
+description: "..."
 
-[webhook] # optional
-url = "https://discord.com/api/webhooks/..."
-preferred_language = "English"
+webhook: # optional
+  url: "https://discord.com/api/webhooks/..."
+  preferred_language: English
 ```
+
+## Agent Configuration
+
+Agent configurations live in `configurations/*.yaml`. The `class` field is a fully qualified Python import path; Catchy imports it dynamically, validates the YAML with that module's `Configuration` model, then calls `AgentClass.from_configuration(...)`.
+
+```yaml
+# configurations/codex.yaml
+id: codex-gpt-5.5
+class: catchy.codex.CodexAgent
+model:
+  provider: openai
+  name: gpt-5.5
+  api_key: ${oc.env:OPENAI_API_KEY}
+```
+
+The old shorthand `class: CodexAgent` still resolves to `catchy.codex.CodexAgent`, but new configs should use the full import path.
 
 ## Keyboard
 
@@ -84,35 +107,57 @@ catchy/
 ├── packages/
 │   ├── core/         # Challenge, Agent, Webhook protocols & models
 │   └── codex/        # CodexAgent — Codex App Server + Docker runtime
+├── configurations/   # Agent YAML configurations
 ├── scripts/
 │   ├── app.py        # The TUI shown above
 │   └── run.py        # Single-shot CLI runner
-├── challenges/       # Bring your own; lets-change is provided as a sample
+├── challenges/       # Challenge YAML, source files, and workspaces
 └── assets/           # Screenshots and images
 ```
 
 ## Adding a new agent
 
-The `Agent` protocol is minimal — implement one method that yields strings:
+The `Agent` protocol is minimal: implement `stream(...)`, add a Pydantic-style `Configuration` model in the same module, and expose `from_configuration(...)` on the agent class.
 
 ```python
+from pathlib import Path
 from typing import AsyncIterator
+
+from pydantic import BaseModel
+
 from catchy.core.agents.protocols import Agent
 from catchy.core.challenge.models import Challenge
 from catchy.core.webhook.models import Webhook
 
+class Configuration(BaseModel):
+    id: str
+
 class MyAgent(Agent):
     key = "my-agent"
 
+    def __init__(self, id: str):
+        self.id = id
+
+    @staticmethod
+    def from_configuration(configuration: Configuration) -> "MyAgent":
+        return MyAgent(id=configuration.id)
+
     async def stream(
-        self, challenge: Challenge, workspace: Path, webhook: Webhook | None = None,
+        self,
+        challenge: Challenge,
+        workspace: Path,
+        webhook: Webhook | None = None,
     ) -> AsyncIterator[str]:
         yield "thinking..."
         ...
 ```
 
-Drop it under `packages/<name>/`, register it in the workspace, and wire it into
-`scripts/app.py`. That's it.
+Drop it under `packages/<name>/`, register it in the workspace, then add a YAML file:
+
+```yaml
+id: my-agent
+class: catchy.my_agent.MyAgent
+```
 
 ## Roadmap
 

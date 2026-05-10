@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 import argparse
 import asyncio
+import importlib
 import logging
 import shutil
 import sys
-import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
-from catchy.codex import CodexAgent, Configuration
+from catchy.core.agents.protocols import Agent
 from catchy.core.challenge.models import Challenge
 from catchy.core.webhook.models import Webhook
 from omegaconf import DictConfig, OmegaConf
@@ -399,7 +399,7 @@ class CatchyApp(App[None]):
             state.agent_id = state.agent_id or self._default_agent_id
         self._active_index = 0
         self._labels: list[Label] = []
-        self._agents: dict[str, CodexAgent] = {}
+        self._agents: dict[str, Agent] = {}
         self._agent_lock = asyncio.Lock()
 
     def compose(self) -> ComposeResult:
@@ -583,7 +583,7 @@ class CatchyApp(App[None]):
             self._set_status(index, "failed")
             self._append_event(index, "error", str(error))
 
-    async def _get_agent(self, agent_id: str) -> CodexAgent:
+    async def _get_agent(self, agent_id: str) -> Agent:
         async with self._agent_lock:
             agent = self._agents.get(agent_id)
             if agent is None:
@@ -809,14 +809,25 @@ class CatchyApp(App[None]):
         ]
 
 
+def _load_yaml_mapping(config_path: Path) -> dict[str, Any]:
+    config = OmegaConf.load(config_path)
+    if not isinstance(config, DictConfig):
+        raise TypeError(f"configuration must be a mapping: {config_path}")
+
+    raw_data: Any = OmegaConf.to_container(config, resolve=True)
+    if not isinstance(raw_data, dict):
+        raise TypeError(f"configuration must be a mapping: {config_path}")
+
+    raw_mapping = cast(dict[Any, Any], raw_data)
+    return {str(key): value for key, value in raw_mapping.items()}
+
+
 def _load_challenge(input_directory: Path) -> tuple[Challenge, Webhook | None]:
-    config_path = input_directory / "challenge.toml"
+    config_path = input_directory / "challenge.yaml"
     if not config_path.exists():
-        raise FileNotFoundError(f"challenge.toml not found: {config_path}")
+        raise FileNotFoundError(f"challenge.yaml not found: {config_path}")
 
-    with config_path.open("rb") as file:
-        data: dict[str, Any] = tomllib.load(file)
-
+    data = _load_yaml_mapping(config_path)
     challenge = Challenge(
         id=data["id"],
         description=data["description"],
@@ -843,6 +854,30 @@ def _normalized_agent_data(config: DictConfig, *, resolve: bool) -> dict[str, An
     return {str(key): value for key, value in raw_mapping.items()}
 
 
+def _agent_class_path(data: dict[str, Any], config_path: Path) -> str:
+    class_path = data.get("class", "catchy.codex.CodexAgent")
+    if class_path == "CodexAgent":
+        return "catchy.codex.CodexAgent"
+    if not isinstance(class_path, str) or not class_path:
+        raise ValueError(f"agent configuration has an invalid class: {config_path}")
+    return class_path
+
+
+def _import_agent_class(class_path: str, config_path: Path) -> type[Any]:
+    module_name, separator, attribute_name = class_path.rpartition(".")
+    if not separator or not module_name or not attribute_name:
+        raise ValueError(
+            f"agent class must be a fully qualified import path in {config_path}: "
+            f"{class_path!r}"
+        )
+
+    module = importlib.import_module(module_name)
+    agent_class = getattr(module, attribute_name, None)
+    if not isinstance(agent_class, type):
+        raise TypeError(f"agent class is not a class in {config_path}: {class_path!r}")
+    return agent_class
+
+
 def _load_agent_definition(config_path: Path) -> AgentDefinition:
     config = OmegaConf.load(config_path)
     if not isinstance(config, DictConfig):
@@ -853,9 +888,7 @@ def _load_agent_definition(config_path: Path) -> AgentDefinition:
     if not isinstance(agent_id, str) or not agent_id:
         raise ValueError(f"agent configuration is missing an id: {config_path}")
 
-    class_name = data.get("class", "CodexAgent")
-    if not isinstance(class_name, str) or not class_name:
-        raise ValueError(f"agent configuration has an invalid class: {config_path}")
+    class_name = _agent_class_path(data, config_path)
 
     model = data.get("model")
     model_name = ""
@@ -890,25 +923,41 @@ def _load_agent_definitions(configurations_dir: Path) -> list[AgentDefinition]:
         if definition.id in seen:
             raise RuntimeError(f"duplicate agent id in configurations: {definition.id}")
         seen.add(definition.id)
-        if definition.class_name != "CodexAgent":
-            raise ValueError(
-                f"unsupported agent class {definition.class_name!r} in {definition.path}"
-            )
     return definitions
 
 
-def _load_agent(config_path: Path) -> CodexAgent:
+def _load_agent(config_path: Path) -> Agent:
     config = OmegaConf.load(config_path)
     if not isinstance(config, DictConfig):
         raise TypeError(f"agent configuration must be a mapping: {config_path}")
 
     data = _normalized_agent_data(config, resolve=True)
-    class_name = data.get("class", "CodexAgent")
-    if class_name != "CodexAgent":
-        raise ValueError(f"unsupported agent class {class_name!r} in {config_path}")
+    agent_class = _import_agent_class(_agent_class_path(data, config_path), config_path)
+    configuration_class = getattr(
+        importlib.import_module(agent_class.__module__),
+        "Configuration",
+        None,
+    )
+    if not hasattr(configuration_class, "model_validate"):
+        raise TypeError(
+            f"agent module must expose a Configuration model with model_validate: "
+            f"{agent_class.__module__}"
+        )
+    configuration_class = cast(Any, configuration_class)
 
-    configuration = Configuration.model_validate(data)
-    return CodexAgent.from_configuration(configuration)
+    from_configuration = getattr(agent_class, "from_configuration", None)
+    if not callable(from_configuration):
+        raise TypeError(
+            f"agent class must expose from_configuration: "
+            f"{agent_class.__module__}.{agent_class.__name__}"
+        )
+
+    agent = from_configuration(configuration_class.model_validate(data))
+    if not isinstance(agent, Agent):
+        raise TypeError(
+            f"from_configuration did not return an Agent for {agent_class.__name__}"
+        )
+    return agent
 
 
 def _load_state(input_directory: Path) -> StreamState:
@@ -932,7 +981,7 @@ def main() -> int:
         "input_directories",
         nargs="*",
         type=Path,
-        help="Optional initial challenge roots containing challenge.toml and source/",
+        help="Optional initial challenge roots containing challenge.yaml and source/",
     )
     parser.add_argument(
         "--configurations-dir",

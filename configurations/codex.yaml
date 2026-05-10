@@ -1,5 +1,5 @@
 id: codex-gpt-5.5
-class: CodexAgent
+class: catchy.codex.CodexAgent
 model:
   provider: openai
   name: gpt-5.5
